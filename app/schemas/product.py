@@ -18,3 +18,9 @@ class ProductOut(BaseModel):
     price: Decimal
 
     model_config = {"from_attributes": True}
+
+class ProductWithTotalStockOut(ProductOut):
+    total_stock: int
+
+class ProductWithWarehouseStockOut(ProductOut):
+    stock_quantity: int

@@ -2,7 +2,13 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas.product import ProductCreate, ProductOut, ProductUpdate
+from app.schemas.product import (
+    ProductCreate,
+    ProductOut,
+    ProductUpdate,
+    ProductWithTotalStockOut,
+    ProductWithWarehouseStockOut,
+)
 from app.services.product_service import ProductService
 
 router = APIRouter(tags=["product"])
@@ -17,14 +23,25 @@ def list_products(db: Session = Depends(get_db)) -> list[ProductOut]:
 
 @router.get(
     "/product/by_category",
-    response_model=list[ProductOut],
+    response_model=list[ProductWithTotalStockOut],
     summary="Liệt kê sản phẩm theo danh mục",
 )
 def list_products_by_category(
     category_id: int = Query(...),
     db: Session = Depends(get_db),
-) -> list[ProductOut]:
+) -> list[ProductWithTotalStockOut]:
     return ProductService(db).list_products_by_category(category_id)
+
+@router.get(
+    "/product/by_warehouse",
+    response_model=list[ProductWithWarehouseStockOut],
+    summary="Liệt kê sản phẩm có trong một kho",
+)
+def list_products_by_warehouse(
+    warehouse_id: int = Query(...),
+    db: Session = Depends(get_db),
+) -> list[ProductWithWarehouseStockOut]:
+    return ProductService(db).list_products_by_warehouse(warehouse_id)
 
 @router.post(
     "/product",
@@ -37,10 +54,10 @@ def create_product(body: ProductCreate, db: Session = Depends(get_db)) -> Produc
 
 @router.get(
     "/product/{id}",
-    response_model=ProductOut,
+    response_model=ProductWithTotalStockOut,
     summary="Lấy chi tiết một sản phẩm",
 )
-def get_product(id: int, db: Session = Depends(get_db)) -> ProductOut:
+def get_product(id: int, db: Session = Depends(get_db)) -> ProductWithTotalStockOut:
     return ProductService(db).get_product(id)
 
 @router.put(
