@@ -6,14 +6,12 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
 
-class SanPham(Base):
-    __tablename__ = "SanPham"
+class Product(Base):
+    __tablename__ = "products"
 
-    ma_san_pham: Mapped[int] = mapped_column(
-        "MaSanPham", Integer, primary_key=True, autoincrement=True
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    category_id: Mapped[int] = mapped_column(
+        ForeignKey("categories.id"), nullable=False
     )
-    ten_san_pham: Mapped[str] = mapped_column("TenSanPham", String(255), nullable=False)
-    ma_danh_muc: Mapped[int] = mapped_column(
-        "MaDanhMuc", ForeignKey("DanhMucSanPham.MaDanhMuc"), nullable=False
-    )
-    gia_ban: Mapped[Decimal] = mapped_column("GiaBan", Numeric(12, 2), nullable=False)
+    price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)

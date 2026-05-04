@@ -2,15 +2,15 @@ from datetime import datetime
 from pydantic import BaseModel
 
 class InventoryUpdate(BaseModel):
-    ma_kho: int
-    ma_san_pham: int
-    so_luong_ton: int
+    warehouse_id: int
+    product_id: int
+    stock_quantity: int
 
 class InventoryOut(BaseModel):
-    ma_ton_kho: int
-    ma_san_pham: int
-    ma_kho: int
-    so_luong_ton: int
-    ngay_cap_nhat: datetime
+    id: int
+    product_id: int
+    warehouse_id: int
+    stock_quantity: int
+    updated_at: datetime
 
     model_config = {"from_attributes": True}

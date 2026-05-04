@@ -1,20 +1,20 @@
 from pydantic import BaseModel, Field
-from app.models.warehouse import KhuVucEnum
+from app.models.warehouse import RegionEnum
 
 class WarehouseCreate(BaseModel):
-    ten_kho: str = Field(..., max_length=100)
-    khu_vuc: KhuVucEnum
-    dia_chi: str = Field(..., max_length=255)
+    name: str = Field(..., max_length=100)
+    region: RegionEnum
+    address: str = Field(..., max_length=255)
 
 class WarehouseUpdate(BaseModel):
-    ten_kho: str = Field(..., max_length=100)
-    khu_vuc: KhuVucEnum
-    dia_chi: str = Field(..., max_length=255)
+    name: str = Field(..., max_length=100)
+    region: RegionEnum
+    address: str = Field(..., max_length=255)
 
 class WarehouseOut(BaseModel):
-    ma_kho: int
-    ten_kho: str
-    khu_vuc: KhuVucEnum
-    dia_chi: str
+    id: int
+    name: str
+    region: RegionEnum
+    address: str
 
     model_config = {"from_attributes": True}

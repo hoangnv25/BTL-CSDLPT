@@ -1,28 +1,28 @@
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
-from app.repositories.inventory_repository import TonKhoRepository
+from app.repositories.inventory_repository import InventoryRepository
 from app.schemas.inventory import InventoryOut, InventoryUpdate
 
 class InventoryService:
     def __init__(self, session: Session) -> None:
         self._session = session
-        self._inventory_repo = TonKhoRepository()
+        self._inventory_repo = InventoryRepository()
 
     def list_inventory(self) -> list[InventoryOut]:
         rows = self._inventory_repo.list_all(self._session)
         return [InventoryOut.model_validate(row) for row in rows]
 
-    def list_by_warehouse(self, ma_kho: int) -> list[InventoryOut]:
-        rows = self._inventory_repo.list_by_warehouse(self._session, ma_kho)
+    def list_by_warehouse(self, warehouse_id: int) -> list[InventoryOut]:
+        rows = self._inventory_repo.list_by_warehouse(self._session, warehouse_id)
         return [InventoryOut.model_validate(row) for row in rows]
 
-    def list_by_product(self, ma_san_pham: int) -> list[InventoryOut]:
-        rows = self._inventory_repo.list_by_product(self._session, ma_san_pham)
+    def list_by_product(self, product_id: int) -> list[InventoryOut]:
+        rows = self._inventory_repo.list_by_product(self._session, product_id)
         return [InventoryOut.model_validate(row) for row in rows]
 
     def update_inventory(self, body: InventoryUpdate) -> InventoryOut:
         row = self._inventory_repo.find_by_product_and_warehouse(
-            self._session, body.ma_san_pham, body.ma_kho
+            self._session, body.product_id, body.warehouse_id
         )
         if row is None:
             raise HTTPException(
@@ -30,7 +30,7 @@ class InventoryService:
                 detail="Không tìm thấy bản ghi tồn kho hợp lệ."
             )
 
-        self._inventory_repo.update_quantity(row, so_luong_ton=body.so_luong_ton)
+        self._inventory_repo.update_quantity(row, stock_quantity=body.stock_quantity)
         self._session.commit()
         self._session.refresh(row)
         return InventoryOut.model_validate(row)

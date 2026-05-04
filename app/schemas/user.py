@@ -1,23 +1,19 @@
 from pydantic import BaseModel, Field
 
-
 class UserCreate(BaseModel):
     username: str = Field(..., max_length=100)
-    ho_ten: str = Field(..., max_length=255)
-
+    full_name: str = Field(..., max_length=255)
 
 class UserLoginRequest(BaseModel):
     username: str = Field(..., max_length=100)
 
-
 class UserLoginResponse(BaseModel):
-    ma_khach_hang: int
-    ho_ten: str
-
+    id: int
+    full_name: str
 
 class UserOut(BaseModel):
-    ma_khach_hang: int
+    id: int
     username: str
-    ho_ten: str
+    full_name: str
 
     model_config = {"from_attributes": True}

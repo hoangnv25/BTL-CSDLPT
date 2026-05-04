@@ -7,7 +7,6 @@ from app.services.warehouse_service import WarehouseService
 
 router = APIRouter(tags=["warehouse"])
 
-
 @router.get(
     "/warehouse",
     response_model=list[WarehouseOut],
@@ -15,7 +14,6 @@ router = APIRouter(tags=["warehouse"])
 )
 def list_warehouses(db: Session = Depends(get_db)) -> list[WarehouseOut]:
     return WarehouseService(db).list_warehouses()
-
 
 @router.post(
     "/warehouse",
@@ -28,15 +26,14 @@ def create_warehouse(
 ) -> WarehouseOut:
     return WarehouseService(db).create_warehouse(body)
 
-
 @router.put(
-    "/warehouse/{ma_kho}",
+    "/warehouse/{id}",
     response_model=WarehouseOut,
     summary="Cập nhật thông tin kho hàng",
 )
 def update_warehouse(
-    ma_kho: int,
+    id: int,
     body: WarehouseUpdate,
     db: Session = Depends(get_db),
 ) -> WarehouseOut:
-    return WarehouseService(db).update_warehouse(ma_kho, body)
+    return WarehouseService(db).update_warehouse(id, body)

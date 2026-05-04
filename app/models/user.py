@@ -4,8 +4,9 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
 
-class Category(Base):
-    __tablename__ = "categories"
+class User(Base):
+    __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    username: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    full_name: Mapped[str] = mapped_column(String(255), nullable=False)

@@ -1,32 +1,30 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from app.models.category import Category
 
-from app.models.category import DanhMucSanPham
-
-
-class DanhMucSanPhamRepository:
+class CategoryRepository:
     @staticmethod
-    def create(session: Session, *, ten_danh_muc: str) -> DanhMucSanPham:
-        row = DanhMucSanPham(ten_danh_muc=ten_danh_muc)
+    def create(session: Session, *, name: str) -> Category:
+        row = Category(name=name)
         session.add(row)
         session.flush()
         return row
 
     @staticmethod
-    def list_all(session: Session) -> list[DanhMucSanPham]:
-        stmt = select(DanhMucSanPham).order_by(DanhMucSanPham.ma_danh_muc)
+    def list_all(session: Session) -> list[Category]:
+        stmt = select(Category).order_by(Category.id)
         return list(session.scalars(stmt).all())
 
     @staticmethod
-    def find_by_id(session: Session, ma_danh_muc: int) -> DanhMucSanPham | None:
-        stmt = select(DanhMucSanPham).where(DanhMucSanPham.ma_danh_muc == ma_danh_muc)
+    def find_by_id(session: Session, id: int) -> Category | None:
+        stmt = select(Category).where(Category.id == id)
         return session.scalar(stmt)
 
     @staticmethod
-    def update(row: DanhMucSanPham, *, ten_danh_muc: str) -> DanhMucSanPham:
-        row.ten_danh_muc = ten_danh_muc
+    def update(row: Category, *, name: str) -> Category:
+        row.name = name
         return row
 
     @staticmethod
-    def delete(session: Session, row: DanhMucSanPham) -> None:
+    def delete(session: Session, row: Category) -> None:
         session.delete(row)

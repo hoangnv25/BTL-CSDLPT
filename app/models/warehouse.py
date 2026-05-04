@@ -5,20 +5,18 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 
 
-class KhuVucEnum(str, enum.Enum):
-    Bac = "Bac"
-    Trung = "Trung"
-    Nam = "Nam"
+class RegionEnum(str, enum.Enum):
+    North = "North"
+    Central = "Central"
+    South = "South"
 
 
-class KhoHang(Base):
-    __tablename__ = "KhoHang"
+class Warehouse(Base):
+    __tablename__ = "warehouses"
 
-    ma_kho: Mapped[int] = mapped_column(
-        "MaKho", Integer, primary_key=True, autoincrement=True
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    region: Mapped[RegionEnum] = mapped_column(
+        Enum(RegionEnum, name="region_enum"), nullable=False
     )
-    ten_kho: Mapped[str] = mapped_column("TenKho", String(100), nullable=False)
-    khu_vuc: Mapped[KhuVucEnum] = mapped_column(
-        "KhuVuc", Enum(KhuVucEnum, name="khuvuc_enum"), nullable=False
-    )
-    dia_chi: Mapped[str] = mapped_column("DiaChi", String(255), nullable=False)
+    address: Mapped[str] = mapped_column(String(255), nullable=False)

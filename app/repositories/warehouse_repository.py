@@ -1,28 +1,28 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from app.models.warehouse import KhoHang, KhuVucEnum
+from app.models.warehouse import Warehouse, RegionEnum
 
-class KhoHangRepository:
+class WarehouseRepository:
     @staticmethod
-    def create(session: Session, *, ten_kho: str, khu_vuc: KhuVucEnum, dia_chi: str) -> KhoHang:
-        row = KhoHang(ten_kho=ten_kho, khu_vuc=khu_vuc, dia_chi=dia_chi)
+    def create(session: Session, *, name: str, region: RegionEnum, address: str) -> Warehouse:
+        row = Warehouse(name=name, region=region, address=address)
         session.add(row)
         session.flush()
         return row
 
     @staticmethod
-    def list_all(session: Session) -> list[KhoHang]:
-        stmt = select(KhoHang).order_by(KhoHang.ma_kho)
+    def list_all(session: Session) -> list[Warehouse]:
+        stmt = select(Warehouse).order_by(Warehouse.id)
         return list(session.scalars(stmt).all())
 
     @staticmethod
-    def find_by_id(session: Session, ma_kho: int) -> KhoHang | None:
-        stmt = select(KhoHang).where(KhoHang.ma_kho == ma_kho)
+    def find_by_id(session: Session, id: int) -> Warehouse | None:
+        stmt = select(Warehouse).where(Warehouse.id == id)
         return session.scalar(stmt)
 
     @staticmethod
-    def update(row: KhoHang, *, ten_kho: str, khu_vuc: KhuVucEnum, dia_chi: str) -> KhoHang:
-        row.ten_kho = ten_kho
-        row.khu_vuc = khu_vuc
-        row.dia_chi = dia_chi
+    def update(row: Warehouse, *, name: str, region: RegionEnum, address: str) -> Warehouse:
+        row.name = name
+        row.region = region
+        row.address = address
         return row

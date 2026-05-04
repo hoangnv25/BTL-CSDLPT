@@ -7,7 +7,6 @@ from app.services.product_service import ProductService
 
 router = APIRouter(tags=["product"])
 
-
 @router.get(
     "/product",
     response_model=list[ProductOut],
@@ -16,18 +15,16 @@ router = APIRouter(tags=["product"])
 def list_products(db: Session = Depends(get_db)) -> list[ProductOut]:
     return ProductService(db).list_products()
 
-
 @router.get(
     "/product/by_category",
     response_model=list[ProductOut],
     summary="Liệt kê sản phẩm theo danh mục",
 )
 def list_products_by_category(
-    ma_danh_muc: int = Query(...),
+    category_id: int = Query(...),
     db: Session = Depends(get_db),
 ) -> list[ProductOut]:
-    return ProductService(db).list_products_by_category(ma_danh_muc)
-
+    return ProductService(db).list_products_by_category(category_id)
 
 @router.post(
     "/product",
@@ -38,24 +35,22 @@ def list_products_by_category(
 def create_product(body: ProductCreate, db: Session = Depends(get_db)) -> ProductOut:
     return ProductService(db).create_product(body)
 
-
 @router.get(
-    "/product/{ma_san_pham}",
+    "/product/{id}",
     response_model=ProductOut,
     summary="Lấy chi tiết một sản phẩm",
 )
-def get_product(ma_san_pham: int, db: Session = Depends(get_db)) -> ProductOut:
-    return ProductService(db).get_product(ma_san_pham)
-
+def get_product(id: int, db: Session = Depends(get_db)) -> ProductOut:
+    return ProductService(db).get_product(id)
 
 @router.put(
-    "/product/{ma_san_pham}",
+    "/product/{id}",
     response_model=ProductOut,
     summary="Cập nhật thông tin sản phẩm",
 )
 def update_product(
-    ma_san_pham: int,
+    id: int,
     body: ProductUpdate,
     db: Session = Depends(get_db),
 ) -> ProductOut:
-    return ProductService(db).update_product(ma_san_pham, body)
+    return ProductService(db).update_product(id, body)
