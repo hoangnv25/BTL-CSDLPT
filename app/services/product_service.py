@@ -21,6 +21,19 @@ class ProductService:
             ma_danh_muc=body.ma_danh_muc,
             gia_ban=body.gia_ban,
         )
+        
+        from app.repositories.warehouse_repository import KhoHangRepository
+        from app.repositories.inventory_repository import TonKhoRepository
+        warehouses = KhoHangRepository().list_all(self._session)
+        inventory_repo = TonKhoRepository()
+        for wh in warehouses:
+            inventory_repo.create(
+                self._session,
+                ma_san_pham=row.ma_san_pham,
+                ma_kho=wh.ma_kho,
+                so_luong_ton=0
+            )
+            
         self._session.commit()
         self._session.refresh(row)
         return ProductOut.model_validate(row)
