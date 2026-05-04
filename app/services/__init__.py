@@ -1,3 +1,5 @@
+from app.services.category_service import CategoryService
+from app.services.product_service import ProductService
 from app.services.user_service import UserService
 
-__all__ = ["UserService"]
+__all__ = ["UserService", "CategoryService", "ProductService"]
