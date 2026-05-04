@@ -1,0 +1,10 @@
+.env
+.cursor
+.docs
+.venv
+docs/*
+
+__pycache__
+*.pyc
+*.pyo
+*.pyd
