@@ -21,10 +21,3 @@ Service `api` mount source code từ máy host vào container:
 
 Mỗi khi bạn sửa code Python, FastAPI sẽ tự reload.
 
-## Test nhanh
-
-Tạo user:
-
-```bash
-curl -X POST http://localhost:8000/users/An
-```

@@ -2,9 +2,11 @@ from fastapi import FastAPI
 from sqlalchemy import text
 
 from app.database import Base, SessionLocal, engine
-from app.models import User
+import app.models  # noqa: F401  # register ORM metadata
+from app.routers.user import router as user_router
 
 app = FastAPI(title="FastAPI + MySQL + Docker")
+app.include_router(user_router)
 
 
 @app.on_event("startup")
@@ -22,13 +24,3 @@ def health_db():
     with SessionLocal() as session:
         session.execute(text("SELECT 1"))
     return {"status": "ok"}
-
-
-@app.post("/users/{name}")
-def create_user(name: str):
-    with SessionLocal() as session:
-        user = User(name=name)
-        session.add(user)
-        session.commit()
-        session.refresh(user)
-    return {"id": user.id, "name": user.name}
