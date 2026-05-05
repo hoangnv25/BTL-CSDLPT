@@ -20,6 +20,7 @@ def list_warehouses(db: Session = Depends(get_db)) -> list[WarehouseOut]:
     response_model=WarehouseOut,
     status_code=201,
     summary="Tạo kho hàng mới",
+    description="religon là North, Central hoặc South"
 )
 def create_warehouse(
     body: WarehouseCreate, db: Session = Depends(get_db)

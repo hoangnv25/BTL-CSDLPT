@@ -9,7 +9,10 @@ class UserLoginRequest(BaseModel):
 
 class UserLoginResponse(BaseModel):
     id: int
+    username: str
     full_name: str
+
+    model_config = {"from_attributes": True}
 
 class UserOut(BaseModel):
     id: int

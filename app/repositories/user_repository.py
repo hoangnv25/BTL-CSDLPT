@@ -14,3 +14,8 @@ class UserRepository:
     def find_by_username(session: Session, username: str) -> User | None:
         stmt = select(User).where(User.username == username)
         return session.scalar(stmt)
+
+    @staticmethod
+    def find_all(session: Session) -> list[User]:
+        stmt = select(User)
+        return session.scalars(stmt).all()

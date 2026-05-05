@@ -2,7 +2,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.repositories.user_repository import UserRepository
-from app.schemas.user import UserCreate, UserLoginRequest, UserLoginResponse
+from app.schemas.user import UserCreate, UserLoginRequest, UserLoginResponse, UserOut
 
 class UserService:
     def __init__(self, session: Session) -> None:
@@ -26,11 +26,15 @@ class UserService:
         self._session.refresh(row)
         return UserLoginResponse.model_validate(row)
 
-    def login(self, body: UserLoginRequest) -> UserLoginResponse:
+    def login(self, body: UserLoginRequest) -> UserOut:
         row = self._user_repo.find_by_username(self._session, body.username.strip())
         if row is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Không tìm thấy người dùng.",
             )
-        return UserLoginResponse.model_validate(row)
+        return UserOut.model_validate(row)
+
+    def get_all_users(self) -> list[UserOut]:
+        rows = self._user_repo.find_all(self._session)
+        return [UserOut.model_validate(row) for row in rows]
