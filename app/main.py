@@ -8,6 +8,7 @@ from app.routers.inventory import router as inventory_router
 from app.routers.product import router as product_router
 from app.routers.user import router as user_router
 from app.routers.warehouse import router as warehouse_router
+from app.routers.order import router as order_router
 
 app = FastAPI(title="FastAPI + MySQL + Docker")
 app.include_router(user_router)
@@ -15,6 +16,7 @@ app.include_router(category_router)
 app.include_router(product_router)
 app.include_router(warehouse_router)
 app.include_router(inventory_router)
+app.include_router(order_router)
 
 
 @app.on_event("startup")
