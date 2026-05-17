@@ -21,9 +21,7 @@ class InventoryService:
         return [InventoryOut.model_validate(row) for row in rows]
 
     def update_inventory(self, body: InventoryUpdate) -> InventoryOut:
-        row = self._inventory_repo.find_by_product_and_warehouse(
-            self._session, body.product_id, body.warehouse_id
-        )
+        row = self._inventory_repo.find_by_id(self._session, body.id)
         if row is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -34,3 +32,7 @@ class InventoryService:
         self._session.commit()
         self._session.refresh(row)
         return InventoryOut.model_validate(row)
+
+    def get_total_stock_by_product(self, product_id: int) -> int:
+        rows = self._inventory_repo.list_by_product(self._session, product_id)
+        return sum(row.stock_quantity for row in rows)

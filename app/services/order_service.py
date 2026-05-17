@@ -10,7 +10,8 @@ from app.models.inventory import Inventory
 from app.models.order import Order
 from app.models.package import Package, PackageStatusEnum
 from app.models.package_detail import PackageDetail
-from app.schemas.order import OrderCreate, OrderOut, PackageOut, PackageItemOut
+from app.schemas.order import OrderCreate, OrderOut, PackageOut, PackageItemOut, OrderListOut
+from app.schemas.user import UserOut
 
 logger = logging.getLogger("app")
 
@@ -141,6 +142,15 @@ class OrderService:
             self._session.flush()
             service_log("OrderService", f"Đã tạo thành công Đơn hàng (Order ID = {order.id}) trong phiên giao dịch.")
 
+            from app.models.warehouse import Warehouse
+            from app.models.category import Category
+            from app.schemas.warehouse import WarehouseOut
+            from app.schemas.product import ProductOut
+
+            warehouses = {w.id: WarehouseOut(id=w.id, name=w.name, region=w.region, address=w.address) 
+                          for w in self._session.query(Warehouse).filter(Warehouse.id.in_(allocations.keys())).all()}
+            categories = {c.id: c.name for c in self._session.query(Category).all()}
+
             packages_out_list = []
 
             # 4.2 Tạo các Packages & PackageDetails tương ứng
@@ -166,8 +176,17 @@ class OrderService:
                         quantity=qty,
                     )
                     self._session.add(detail)
+                    
+                    prod = products_cache[product_id]
+                    prod_out = ProductOut(
+                        id=prod.id,
+                        name=prod.name,
+                        category_id=prod.category_id,
+                        category_name=categories.get(prod.category_id),
+                        price=prod.price
+                    )
                     package_items_list.append(
-                        PackageItemOut(product_id=product_id, quantity=qty)
+                        PackageItemOut(product=prod_out, quantity=qty)
                     )
                     service_log(
                         "OrderService",
@@ -177,7 +196,7 @@ class OrderService:
                 packages_out_list.append(
                     PackageOut(
                         package_id=package.id,
-                        warehouse_id=warehouse_id,
+                        warehouse=warehouses.get(warehouse_id),
                         status=package.status.value,
                         items=package_items_list,
                     )
@@ -192,7 +211,7 @@ class OrderService:
 
             return OrderOut(
                 order_id=order.id,
-                user_id=order.user_id,
+                user=UserOut(id=user.id, username=user.username, full_name=user.full_name),
                 shipping_address=order.shipping_address,
                 total_amount=order.total_amount,
                 ordered_at=order.ordered_at,
@@ -209,3 +228,92 @@ class OrderService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Lỗi tạo đơn hàng: {str(e)}",
             )
+
+    def list_orders(self) -> list[OrderListOut]:
+        orders = self._session.query(Order).order_by(Order.id.desc()).all()
+
+        # Get all users for the orders in a single query
+        user_ids = {order.user_id for order in orders}
+        users = self._session.query(User).filter(User.id.in_(user_ids)).all() if user_ids else []
+        users_by_id = {u.id: UserOut(id=u.id, username=u.username, full_name=u.full_name) for u in users}
+
+        result = []
+        for order in orders:
+            user_out = users_by_id.get(order.user_id)
+            if user_out:
+                result.append(
+                    OrderListOut(
+                        order_id=order.id,
+                        user=user_out,
+                        shipping_address=order.shipping_address,
+                        total_amount=order.total_amount,
+                        ordered_at=order.ordered_at
+                    )
+                )
+        return result
+
+    def get_order(self, order_id: int) -> OrderOut:
+        order = self._session.query(Order).filter(Order.id == order_id).first()
+        if not order:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Không tìm thấy đơn hàng.",
+            )
+
+        user = self._session.query(User).filter(User.id == order.user_id).first()
+        user_out = UserOut(id=user.id, username=user.username, full_name=user.full_name) if user else None
+
+        packages = self._session.query(Package).filter(Package.order_id == order_id).all()
+        package_ids = [p.id for p in packages]
+        details = self._session.query(PackageDetail).filter(PackageDetail.package_id.in_(package_ids)).all() if package_ids else []
+
+        from app.models.warehouse import Warehouse
+        from app.models.category import Category
+        from app.schemas.warehouse import WarehouseOut
+        from app.schemas.product import ProductOut
+
+        warehouse_ids = {p.warehouse_id for p in packages}
+        warehouses = {w.id: WarehouseOut(id=w.id, name=w.name, region=w.region, address=w.address) 
+                      for w in self._session.query(Warehouse).filter(Warehouse.id.in_(warehouse_ids)).all()} if warehouse_ids else {}
+
+        product_ids = {d.product_id for d in details}
+        products = self._session.query(Product).filter(Product.id.in_(product_ids)).all() if product_ids else []
+        categories = {c.id: c.name for c in self._session.query(Category).all()}
+        products_out = {p.id: ProductOut(id=p.id, name=p.name, category_id=p.category_id, category_name=categories.get(p.category_id), price=p.price) 
+                        for p in products}
+
+        # Group package details by package_id
+        details_by_package = {}
+        for d in details:
+            if d.package_id not in details_by_package:
+                details_by_package[d.package_id] = []
+            prod_out = products_out.get(d.product_id)
+            if prod_out:
+                details_by_package[d.package_id].append(
+                    PackageItemOut(product=prod_out, quantity=d.quantity)
+                )
+
+        packages_out_list = []
+        for p in packages:
+            wh_out = warehouses.get(p.warehouse_id)
+            if wh_out:
+                packages_out_list.append(
+                    PackageOut(
+                        package_id=p.id,
+                        warehouse=wh_out,
+                        status=p.status.value,
+                        items=details_by_package.get(p.id, [])
+                    )
+                )
+
+        return OrderOut(
+            order_id=order.id,
+            user=user_out,
+            shipping_address=order.shipping_address,
+            total_amount=order.total_amount,
+            ordered_at=order.ordered_at,
+            packages=packages_out_list,
+        )
+
+
+

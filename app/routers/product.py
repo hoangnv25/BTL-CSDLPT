@@ -8,6 +8,7 @@ from app.schemas.product import (
     ProductUpdate,
     ProductWithTotalStockOut,
     ProductWithWarehouseStockOut,
+    ProductDetailOut,
 )
 from app.services.product_service import ProductService
 
@@ -15,10 +16,10 @@ router = APIRouter(tags=["product"])
 
 @router.get(
     "/product",
-    response_model=list[ProductOut],
+    response_model=list[ProductWithTotalStockOut],
     summary="Liệt kê toàn bộ sản phẩm",
 )
-def list_products(db: Session = Depends(get_db)) -> list[ProductOut]:
+def list_products(db: Session = Depends(get_db)) -> list[ProductWithTotalStockOut]:
     return ProductService(db).list_products()
 
 @router.get(
@@ -54,10 +55,10 @@ def create_product(body: ProductCreate, db: Session = Depends(get_db)) -> Produc
 
 @router.get(
     "/product/{id}",
-    response_model=ProductWithTotalStockOut,
-    summary="Lấy chi tiết một sản phẩm",
+    response_model=ProductDetailOut,
+    summary="Lấy chi tiết một sản phẩm, có cả tồn kho từng kho",
 )
-def get_product(id: int, db: Session = Depends(get_db)) -> ProductWithTotalStockOut:
+def get_product(id: int, db: Session = Depends(get_db)) -> ProductDetailOut:
     return ProductService(db).get_product(id)
 
 @router.put(

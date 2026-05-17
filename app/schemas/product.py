@@ -1,3 +1,4 @@
+from datetime import datetime
 from decimal import Decimal
 from pydantic import BaseModel, Field
 
@@ -15,6 +16,7 @@ class ProductOut(BaseModel):
     id: int
     name: str
     category_id: int
+    category_name: str | None = None
     price: Decimal
 
     model_config = {"from_attributes": True}
@@ -24,3 +26,16 @@ class ProductWithTotalStockOut(ProductOut):
 
 class ProductWithWarehouseStockOut(ProductOut):
     stock_quantity: int
+
+class ProductInventoryOut(BaseModel):
+    id: int
+    warehouse_id: int
+    warehouse_name: str
+    stock_quantity: int
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+class ProductDetailOut(ProductWithTotalStockOut):
+    inventory: list[ProductInventoryOut]
+

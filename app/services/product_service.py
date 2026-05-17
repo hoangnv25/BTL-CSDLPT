@@ -10,6 +10,8 @@ from app.schemas.product import (
     ProductUpdate,
     ProductWithTotalStockOut,
     ProductWithWarehouseStockOut,
+    ProductDetailOut,
+    ProductInventoryOut,
 )
 
 class ProductService:
@@ -20,7 +22,12 @@ class ProductService:
         self._inventory_repo = InventoryRepository()
 
     def create_product(self, body: ProductCreate) -> ProductOut:
-        self._require_category(body.category_id)
+        category = self._category_repo.find_by_id(self._session, body.category_id)
+        if not category:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Không tìm thấy danh mục sản phẩm.",
+            )
 
         row = self._product_repo.create(
             self._session,
@@ -41,14 +48,43 @@ class ProductService:
             
         self._session.commit()
         self._session.refresh(row)
-        return ProductOut.model_validate(row)
+        return ProductOut(
+            id=row.id,
+            name=row.name,
+            category_id=row.category_id,
+            category_name=category.name,
+            price=row.price
+        )
 
-    def list_products(self) -> list[ProductOut]:
+    def list_products(self) -> list[ProductWithTotalStockOut]:
+        from app.services.inventory_service import InventoryService
+        inv_service = InventoryService(self._session)
+        
         rows = self._product_repo.list_all(self._session)
-        return [ProductOut.model_validate(row) for row in rows]
+        categories = {c.id: c.name for c in self._category_repo.list_all(self._session)}
+        
+        result = []
+        for row in rows:
+            total_stock = inv_service.get_total_stock_by_product(row.id)
+            result.append(
+                ProductWithTotalStockOut(
+                    id=row.id,
+                    name=row.name,
+                    category_id=row.category_id,
+                    category_name=categories.get(row.category_id),
+                    price=row.price,
+                    total_stock=total_stock
+                )
+            )
+        return result
 
     def list_products_by_category(self, category_id: int) -> list[ProductWithTotalStockOut]:
-        self._require_category(category_id)
+        category = self._category_repo.find_by_id(self._session, category_id)
+        if not category:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Không tìm thấy danh mục sản phẩm.",
+            )
         rows = self._product_repo.list_by_category(self._session, category_id)
         
         result = []
@@ -60,6 +96,7 @@ class ProductService:
                     id=row.id,
                     name=row.name,
                     category_id=row.category_id,
+                    category_name=category.name,
                     price=row.price,
                     total_stock=total_stock
                 )
@@ -75,6 +112,7 @@ class ProductService:
                 detail="Không tìm thấy kho hàng.",
             )
         
+        categories = {c.id: c.name for c in self._category_repo.list_all(self._session)}
         invs = self._inventory_repo.list_by_warehouse(self._session, warehouse_id)
         result = []
         for inv in invs:
@@ -85,13 +123,14 @@ class ProductService:
                         id=prod.id,
                         name=prod.name,
                         category_id=prod.category_id,
+                        category_name=categories.get(prod.category_id),
                         price=prod.price,
                         stock_quantity=inv.stock_quantity
                     )
                 )
         return result
 
-    def get_product(self, id: int) -> ProductWithTotalStockOut:
+    def get_product(self, id: int) -> ProductDetailOut:
         row = self._product_repo.find_by_id(self._session, id)
         if row is None:
             raise HTTPException(
@@ -99,14 +138,35 @@ class ProductService:
                 detail="Không tìm thấy sản phẩm.",
             )
         
+        category = self._category_repo.find_by_id(self._session, row.category_id)
+        category_name = category.name if category else None
+        
         invs = self._inventory_repo.list_by_product(self._session, id)
         total_stock = sum(i.stock_quantity for i in invs)
-        return ProductWithTotalStockOut(
+
+        from app.repositories.warehouse_repository import WarehouseRepository
+        warehouses = {w.id: w.name for w in WarehouseRepository.list_all(self._session)}
+
+        inventory_list = []
+        for inv in invs:
+            inventory_list.append(
+                ProductInventoryOut(
+                    id=inv.id,
+                    warehouse_id=inv.warehouse_id,
+                    warehouse_name=warehouses.get(inv.warehouse_id, "Unknown"),
+                    stock_quantity=inv.stock_quantity,
+                    updated_at=inv.updated_at
+                )
+            )
+
+        return ProductDetailOut(
             id=row.id,
             name=row.name,
             category_id=row.category_id,
+            category_name=category_name,
             price=row.price,
-            total_stock=total_stock
+            total_stock=total_stock,
+            inventory=inventory_list
         )
 
     def update_product(self, id: int, body: ProductUpdate) -> ProductOut:
@@ -117,7 +177,13 @@ class ProductService:
                 detail="Không tìm thấy sản phẩm.",
             )
 
-        self._require_category(body.category_id)
+        category = self._category_repo.find_by_id(self._session, body.category_id)
+        if not category:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Không tìm thấy danh mục sản phẩm.",
+            )
+
         self._product_repo.update(
             row,
             name=body.name.strip(),
@@ -126,7 +192,13 @@ class ProductService:
         )
         self._session.commit()
         self._session.refresh(row)
-        return ProductOut.model_validate(row)
+        return ProductOut(
+            id=row.id,
+            name=row.name,
+            category_id=row.category_id,
+            category_name=category.name,
+            price=row.price
+        )
 
     def _require_category(self, category_id: int) -> None:
         category = self._category_repo.find_by_id(self._session, category_id)

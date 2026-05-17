@@ -32,6 +32,11 @@ class InventoryRepository:
         return list(session.scalars(stmt).all())
 
     @staticmethod
+    def find_by_id(session: Session, id: int) -> Inventory | None:
+        stmt = select(Inventory).where(Inventory.id == id)
+        return session.scalar(stmt)
+
+    @staticmethod
     def find_by_product_and_warehouse(session: Session, product_id: int, warehouse_id: int) -> Inventory | None:
         stmt = select(Inventory).where(
             Inventory.product_id == product_id,

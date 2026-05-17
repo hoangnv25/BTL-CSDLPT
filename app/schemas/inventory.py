@@ -2,9 +2,9 @@ from datetime import datetime
 from pydantic import BaseModel
 
 class InventoryUpdate(BaseModel):
-    warehouse_id: int
-    product_id: int
+    id: int
     stock_quantity: int
+
 
 class InventoryOut(BaseModel):
     id: int

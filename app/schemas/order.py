@@ -3,6 +3,11 @@ from decimal import Decimal
 from pydantic import BaseModel, Field
 
 
+from app.schemas.user import UserOut
+from app.schemas.warehouse import WarehouseOut
+from app.schemas.product import ProductOut
+
+
 class OrderItemCreate(BaseModel):
     product_id: int
     quantity: int = Field(..., gt=0)
@@ -15,7 +20,7 @@ class OrderCreate(BaseModel):
 
 
 class PackageItemOut(BaseModel):
-    product_id: int
+    product: ProductOut
     quantity: int
 
     model_config = {"from_attributes": True}
@@ -23,7 +28,7 @@ class PackageItemOut(BaseModel):
 
 class PackageOut(BaseModel):
     package_id: int
-    warehouse_id: int
+    warehouse: WarehouseOut
     status: str
     items: list[PackageItemOut]
 
@@ -32,10 +37,23 @@ class PackageOut(BaseModel):
 
 class OrderOut(BaseModel):
     order_id: int
-    user_id: int
+    user: UserOut
     shipping_address: str
     total_amount: Decimal
     ordered_at: datetime
     packages: list[PackageOut]
 
     model_config = {"from_attributes": True}
+
+
+class OrderListOut(BaseModel):
+    order_id: int
+    user: UserOut
+    shipping_address: str
+    total_amount: Decimal
+    ordered_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+

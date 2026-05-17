@@ -28,7 +28,7 @@ def list_inventory_by_warehouse(
 @router.get(
     "/inventory/by_product",
     response_model=list[InventoryOut],
-    summary="Liệt kê tồn kho theo sản phẩm",
+    summary="Liệt kê tồn kho theo sản phẩm -- FE bỏ qua",
 )
 def list_inventory_by_product(
     product_id: int = Query(...), db: Session = Depends(get_db)
