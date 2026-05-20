@@ -11,3 +11,6 @@ env
 .git
 .gitignore
 mysql_data
+FE/
+node_modules/
+

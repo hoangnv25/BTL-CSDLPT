@@ -1,7 +1,7 @@
 services:
-  api:
+  be:
     build: .
-    container_name: fastapi_app
+    container_name: csdlpt_be
     ports:
       - "8000:8000"
     env_file:
@@ -13,15 +13,28 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  fe:
+    build: ./FE
+    container_name: csdlpt_fe
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./FE:/app
+      - /app/node_modules
+    depends_on:
+      - be
+    restart: unless-stopped
+
+
   mysql:
     image: mysql:8.0
-    container_name: mysql_db
+    container_name:  csdlpt_db
     command: ["mysqld", "--port=3307"]
     environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: fastapi_db
-      MYSQL_USER: fastapi_user
-      MYSQL_PASSWORD: fastapi_password
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: db
+      MYSQL_USER: user
+      MYSQL_PASSWORD: 123
     # MySQL trong container lắng nghe 3307; từ máy host: localhost:3307
     ports:
       - "3307:3307"
@@ -38,7 +51,100 @@ services:
           "-P",
           "3307",
           "-uroot",
-          "-prootpassword",
+          "-proot",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  mysql_node1:
+    image: mysql:8.0
+    container_name: csdlpt_db_node1
+    command: ["mysqld", "--port=3308"]
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: db
+      MYSQL_USER: user
+      MYSQL_PASSWORD: 123
+    ports:
+      - "3308:3308"
+    volumes:
+      - mysql_data_node1:/var/lib/mysql
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "127.0.0.1",
+          "-P",
+          "3308",
+          "-uroot",
+          "-proot",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  mysql_node2:
+    image: mysql:8.0
+    container_name: csdlpt_db_node2
+    command: ["mysqld", "--port=3309"]
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: db
+      MYSQL_USER: user
+      MYSQL_PASSWORD: 123
+    ports:
+      - "3309:3309"
+    volumes:
+      - mysql_data_node2:/var/lib/mysql
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "127.0.0.1",
+          "-P",
+          "3309",
+          "-uroot",
+          "-proot",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  mysql_node3:
+    image: mysql:8.0
+    container_name: csdlpt_db_node3
+    command: ["mysqld", "--port=3310"]
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: db
+      MYSQL_USER: user
+      MYSQL_PASSWORD: 123
+    ports:
+      - "3310:3310"
+    volumes:
+      - mysql_data_node3:/var/lib/mysql
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "127.0.0.1",
+          "-P",
+          "3310",
+          "-uroot",
+          "-proot",
         ]
       interval: 5s
       timeout: 5s
@@ -47,3 +153,6 @@ services:
 
 volumes:
   mysql_data:
+  mysql_data_node1:
+  mysql_data_node2:
+  mysql_data_node3:
