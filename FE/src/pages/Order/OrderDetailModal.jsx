@@ -6,6 +6,7 @@ export default function OrderDetailModal({ isOpen, onClose, orderId }) {
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [updatingPackageId, setUpdatingPackageId] = useState(null);
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
@@ -27,6 +28,35 @@ export default function OrderDetailModal({ isOpen, onClose, orderId }) {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUpdatePackageStatus = async (packageId, newStatus) => {
+    setUpdatingPackageId(packageId);
+    try {
+      const response = await fetch(`${API_BASE_URL}/package/${packageId}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!response.ok) throw new Error('Không thể cập nhật trạng thái kiện hàng');
+      
+      // Cập nhật state cục bộ để giao diện phản hồi nhanh
+      setOrder(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          packages: prev.packages.map(pkg => 
+            pkg.package_id === packageId ? { ...pkg, status: newStatus } : pkg
+          )
+        };
+      });
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setUpdatingPackageId(null);
     }
   };
 
@@ -98,7 +128,16 @@ export default function OrderDetailModal({ isOpen, onClose, orderId }) {
                         <PackageIcon size={18} weight="fill" color="var(--primary-color)" />
                         <h4>Kiện hàng từ: {pkg.warehouse?.name || 'Kho không xác định'}</h4>
                       </div>
-                      <span className={styles.packageBadge}>{pkg.status || 'Pending'}</span>
+                        <select
+                        value={pkg.status || 'Pending'}
+                        onChange={(e) => handleUpdatePackageStatus(pkg.package_id, e.target.value)}
+                        disabled={updatingPackageId === pkg.package_id}
+                        className={`${styles.packageBadgeSelect} ${styles[`status${pkg.status || 'Pending'}`]}`}
+                      >
+                        <option value="Pending">Pending</option>
+                        <option value="Shipping">Shipping</option>
+                        <option value="Delivered">Delivered</option>
+                      </select>
                     </div>
                     <table className={styles.table}>
                       <thead>

@@ -411,11 +411,34 @@
   color: var(--primary-color);
 }
 
-.packageBadge {
+.packageBadgeSelect {
   font-size: 12px;
-  padding: 2px 8px;
+  padding: 4px 8px;
   border-radius: 10px;
-  background: #e0f2fe;
+  font-weight: 600;
+  border: none;
+  outline: none;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.packageBadgeSelect:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.statusDelivered {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.statusShipping {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.statusPending {
+  background-color: #e0f2fe;
   color: #0369a1;
-  font-weight: 500;
 }
