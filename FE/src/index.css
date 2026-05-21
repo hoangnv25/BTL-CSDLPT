@@ -1,5 +1,37 @@
+:root {
+  --font-family: 'Be Vietnam Pro', system-ui, -apple-system, sans-serif;
+  
+  /* Primary Colors */
+  --primary-color: #9a2e24;
+  --primary-hover: #7a241c; 
+  
+  /* Backgrounds */
+  --bg-main: #ffffff;
+  --bg-sidebar: #ffffff;
+  --surface-hover: #f9f9f9;
+  
+  /* Text & Border */
+  --text-primary: #1a1a1a;
+  --text-secondary: #666666;
+  --border-color: #e5e5e5;
+  
+  /* Status Colors */
+  --success-color: #10b981;
+  --warning-color: #f59e0b;
+  --danger-color: #ef4444;
+  
+  --transition: all 0.2s ease-in-out;
+}
+
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-family);
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+  font-size: 14px;
 }
