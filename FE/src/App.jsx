@@ -11,10 +11,34 @@ import PackageWareHourse from './pages/PackageWareHourse/PackageWareHourse';
 import MyOrder from './pages/MyOrder/MyOrder';
 import ProductView from './pages/ProductView/ProductView';
 import InventoryWareHourse from './pages/InventoryWareHourse/InventoryWareHourse';
+import { roleAllowedPages } from './components/Sidebar/roles';
 
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [activeTab, setActiveTab] = useState('order'); // Mặc định vào order để test
+  
+  // State quản lý việc giả lập vai trò & kho
+  const [currentOption, setCurrentOption] = useState('admin');
+
+  // Phân tích role và warehouseId từ currentOption
+  let role = 'admin';
+  let warehouseId = 1; // Giá trị mặc định phòng hờ
+  
+  if (currentOption === 'user') {
+    role = 'user';
+  } else if (currentOption.startsWith('manager_')) {
+    role = 'manager';
+    warehouseId = parseInt(currentOption.split('_')[1], 10);
+  }
+
+  // Khi thay đổi Vai trò/Kho, nếu activeTab không thuộc quyền truy cập của vai trò mới,
+  // tự động nhảy sang tab đầu tiên được cho phép để tránh giao diện trống hoặc lỗi
+  useEffect(() => {
+    const allowed = roleAllowedPages[role] || [];
+    if (!allowed.includes(activeTab)) {
+      setActiveTab(allowed[0] || 'product_view');
+    }
+  }, [currentOption, role, activeTab]);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('currentUser');
@@ -31,6 +55,7 @@ function App() {
   const handleLoginSuccess = (userData) => {
     setCurrentUser(userData);
     setActiveTab('order');
+    setCurrentOption('admin'); // Reset về admin khi login
   };
 
   const handleLogout = () => {
@@ -57,13 +82,15 @@ function App() {
       case 'package':
         return <Package />;
       case 'package_warehouse':
-        return <PackageWareHourse warehouse_id={1} />;
+        // Sử dụng key={warehouseId} để buộc React remount & fetch lại dữ liệu mới khi đổi kho
+        return <PackageWareHourse warehouse_id={warehouseId} key={`pkg-wh-${warehouseId}`} />;
       case 'my_order':
         return <MyOrder />;
       case 'product_view':
         return <ProductView />;
       case 'inventory_warehouse':
-        return <InventoryWareHourse warehouse_id={1} />;
+        // Sử dụng key={warehouseId} để buộc React remount & fetch lại dữ liệu mới khi đổi kho
+        return <InventoryWareHourse warehouse_id={warehouseId} key={`inv-wh-${warehouseId}`} />;
       default:
         return <div>Page Not Found</div>;
     }
@@ -76,6 +103,8 @@ function App() {
         setActiveTab={setActiveTab} 
         currentUser={currentUser} 
         onLogout={handleLogout} 
+        currentOption={currentOption}
+        onOptionChange={setCurrentOption}
       />
       
       <main style={{ flex: 1, overflowY: 'auto', padding: '2rem' }}>
