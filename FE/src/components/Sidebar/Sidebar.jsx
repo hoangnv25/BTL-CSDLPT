@@ -1,5 +1,5 @@
 import React from 'react';
-import { Package, ListDashes, SignOut, Warehouse as WarehouseIcon, Stack } from '@phosphor-icons/react';
+import { Package, ListDashes, SignOut, Warehouse as WarehouseIcon, Stack, Truck, Receipt, Eye, Database } from '@phosphor-icons/react';
 import styles from './Sidebar.module.css';
 
 export default function Sidebar({ activeTab, setActiveTab, currentUser, onLogout }) {
@@ -9,6 +9,11 @@ export default function Sidebar({ activeTab, setActiveTab, currentUser, onLogout
     { id: 'product', label: 'Sản Phẩm', icon: Package },
     { id: 'warehouse', label: 'Kho Hàng', icon: WarehouseIcon },
     { id: 'inventory', label: 'Tồn Kho', icon: Stack },
+    { id: 'package', label: 'Kiện Hàng', icon: Truck },
+    { id: 'package_warehouse', label: 'Kiện Hàng Theo Kho', icon: Truck },
+    { id: 'my_order', label: 'Đơn Hàng Của Tôi', icon: Receipt },
+    { id: 'product_view', label: 'Xem Sản Phẩm', icon: Eye },
+    { id: 'inventory_warehouse', label: 'Tồn Kho Theo Kho', icon: Database },
   ];
 
   return (

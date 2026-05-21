@@ -34,6 +34,16 @@ def list_orders(db: Session = Depends(get_db)) -> list[OrderListOut]:
 
 
 @router.get(
+    "/order/my",
+    response_model=list[OrderListOut],
+    summary="Xem đơn hàng của tôi",
+    description="Lấy danh sách đơn hàng của một user cụ thể dựa trên user_id gửi lên.",
+)
+def list_my_orders(user_id: int, db: Session = Depends(get_db)) -> list[OrderListOut]:
+    return OrderService(db).list_my_orders(user_id)
+
+
+@router.get(
     "/order/{id}",
     response_model=OrderOut,
     summary="Xem chi tiết một đơn hàng",

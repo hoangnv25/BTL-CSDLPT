@@ -6,6 +6,11 @@ import Product from './pages/Product/Product';
 import Warehouse from './pages/Warehouse/Warehouse';
 import Inventory from './pages/Inventory/Inventory';
 import Order from './pages/Order/Order';
+import Package from './pages/Package/Package';
+import PackageWareHourse from './pages/PackageWareHourse/PackageWareHourse';
+import MyOrder from './pages/MyOrder/MyOrder';
+import ProductView from './pages/ProductView/ProductView';
+import InventoryWareHourse from './pages/InventoryWareHourse/InventoryWareHourse';
 
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -49,6 +54,16 @@ function App() {
         return <Inventory />;
       case 'order':
         return <Order />;
+      case 'package':
+        return <Package />;
+      case 'package_warehouse':
+        return <PackageWareHourse warehouse_id={1} />;
+      case 'my_order':
+        return <MyOrder />;
+      case 'product_view':
+        return <ProductView />;
+      case 'inventory_warehouse':
+        return <InventoryWareHourse warehouse_id={1} />;
       default:
         return <div>Page Not Found</div>;
     }

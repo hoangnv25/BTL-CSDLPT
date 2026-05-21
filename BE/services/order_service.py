@@ -252,6 +252,27 @@ class OrderService:
                 )
         return result
 
+    def list_my_orders(self, user_id: int) -> list[OrderListOut]:
+        orders = self._session.query(Order).filter(Order.user_id == user_id).order_by(Order.id.desc()).all()
+
+        user = self._session.query(User).filter(User.id == user_id).first()
+        if not user:
+            return []
+        user_out = UserOut(id=user.id, username=user.username, full_name=user.full_name)
+
+        result = []
+        for order in orders:
+            result.append(
+                OrderListOut(
+                    order_id=order.id,
+                    user=user_out,
+                    shipping_address=order.shipping_address,
+                    total_amount=order.total_amount,
+                    ordered_at=order.ordered_at
+                )
+            )
+        return result
+
     def get_order(self, order_id: int) -> OrderOut:
         order = self._session.query(Order).filter(Order.id == order_id).first()
         if not order:
