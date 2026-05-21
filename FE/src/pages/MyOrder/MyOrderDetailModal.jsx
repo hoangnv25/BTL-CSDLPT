@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Package as PackageIcon } from '@phosphor-icons/react';
 import styles from './MyOrder.module.css';
+import { formatToVietnamTime } from '../../utils/dateTime';
 
 export default function MyOrderDetailModal({ isOpen, onClose, orderId }) {
   const [order, setOrder] = useState(null);
@@ -37,10 +38,7 @@ export default function MyOrderDetailModal({ isOpen, onClose, orderId }) {
     return Number(amount).toLocaleString('vi-VN') + ' đ';
   };
 
-  const formatDate = (dateString) => {
-    if (!dateString) return '';
-    return new Date(dateString).toLocaleString('vi-VN');
-  };
+
 
   return (
     <div className={styles.modalOverlay}>
@@ -68,7 +66,7 @@ export default function MyOrderDetailModal({ isOpen, onClose, orderId }) {
                   </div>
                   <div className={styles.detailItem}>
                     <span>Ngày đặt:</span>
-                    <strong>{formatDate(order.ordered_at)}</strong>
+                    <strong>{formatToVietnamTime(order.ordered_at)}</strong>
                   </div>
                 </div>
                 <div>

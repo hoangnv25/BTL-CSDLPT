@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { PencilSimple, MapPin } from '@phosphor-icons/react';
 import styles from './Inventory.module.css';
 import InventoryModal from './InventoryModal';
+import { formatToVietnamTime } from '../../utils/dateTime';
 
 export default function Inventory() {
   const [inventories, setInventories] = useState([]);
@@ -104,10 +105,7 @@ export default function Inventory() {
     fetchInventories(); // Load lại data
   };
 
-  const formatDate = (dateString) => {
-    if (!dateString) return '';
-    return new Date(dateString).toLocaleString('vi-VN');
-  };
+
 
   // Pagination Logic
   const totalPages = Math.ceil(inventories.length / ITEMS_PER_PAGE) || 1;
@@ -211,7 +209,7 @@ export default function Inventory() {
                       {inv.stock_quantity}
                     </td>
                     <td className={styles.td} style={{ textAlign: 'right', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                      {formatDate(inv.updated_at)}
+                      {formatToVietnamTime(inv.updated_at)}
                     </td>
                     <td className={styles.td}>
                       <div className={styles.actions} style={{ justifyContent: 'flex-end' }}>

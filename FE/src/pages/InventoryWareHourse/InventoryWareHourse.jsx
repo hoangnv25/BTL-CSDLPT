@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { PencilSimple, MapPin } from '@phosphor-icons/react';
 import styles from './InventoryWareHourse.module.css';
 import InventoryModal from '../Inventory/InventoryModal'; // Reuse existing update modal
+import { formatToVietnamTime } from '../../utils/dateTime';
 
 export default function InventoryWareHourse({ warehouse_id = 1 }) {
   const [inventories, setInventories] = useState([]);
@@ -90,10 +91,7 @@ export default function InventoryWareHourse({ warehouse_id = 1 }) {
     fetchInventories(); // Load lại data
   };
 
-  const formatDate = (dateString) => {
-    if (!dateString) return '';
-    return new Date(dateString).toLocaleString('vi-VN');
-  };
+
 
   // Pagination Logic
   const totalPages = Math.ceil(inventories.length / ITEMS_PER_PAGE) || 1;
@@ -182,7 +180,7 @@ export default function InventoryWareHourse({ warehouse_id = 1 }) {
                       {inv.stock_quantity}
                     </td>
                     <td className={styles.td} style={{ textAlign: 'right', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                      {formatDate(inv.updated_at)}
+                      {formatToVietnamTime(inv.updated_at)}
                     </td>
                     <td className={styles.td}>
                       <div className={styles.actions} style={{ justifyContent: 'flex-end' }}>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Truck, MapPin, CalendarBlank, ShoppingBag } from '@phosphor-icons/react';
 import styles from './Package.module.css';
+import { formatToVietnamTime } from '../../utils/dateTime';
 
 export default function Package() {
   const [packages, setPackages] = useState([]);
@@ -79,10 +80,7 @@ export default function Package() {
     }
   };
 
-  const formatDate = (dateString) => {
-    if (!dateString) return '';
-    return new Date(dateString).toLocaleString('vi-VN');
-  };
+
 
   const formatCurrency = (amount) => {
     if (!amount) return '0';
@@ -172,7 +170,7 @@ export default function Package() {
                     <td className={styles.td} style={{ textAlign: 'right', fontSize: '13px', color: 'var(--text-secondary)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', justifyContent: 'flex-end' }}>
                         <CalendarBlank size={14} />
-                        {formatDate(pkg.created_at)}
+                        {formatToVietnamTime(pkg.created_at)}
                       </div>
                     </td>
                     <td className={styles.td} style={{ textAlign: 'right' }}>

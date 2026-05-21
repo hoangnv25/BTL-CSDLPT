@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, MapPin } from '@phosphor-icons/react';
 import styles from './Product.module.css';
+import { formatToVietnamTime } from '../../utils/dateTime';
 
 export default function ProductDetailModal({ isOpen, onClose, productId }) {
   const [productDetail, setProductDetail] = useState(null);
@@ -35,11 +36,6 @@ export default function ProductDetailModal({ isOpen, onClose, productId }) {
   const formatCurrency = (amount) => {
     if (!amount) return '0';
     return Number(amount).toLocaleString('vi-VN');
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return '';
-    return new Date(dateString).toLocaleString('vi-VN');
   };
 
   return (
@@ -107,7 +103,7 @@ export default function ProductDetailModal({ isOpen, onClose, productId }) {
                             {inv.stock_quantity}
                           </td>
                           <td className={styles.td} style={{ padding: '0.5rem 1rem', textAlign: 'right', color: 'var(--text-secondary)', fontSize: '13px' }}>
-                            {formatDate(inv.updated_at)}
+                            {formatToVietnamTime(inv.updated_at)}
                           </td>
                         </tr>
                       ))

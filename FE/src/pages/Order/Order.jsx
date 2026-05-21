@@ -3,6 +3,7 @@ import { Plus, Eye } from '@phosphor-icons/react';
 import styles from './Order.module.css';
 import OrderCreateModal from './OrderCreateModal';
 import OrderDetailModal from './OrderDetailModal';
+import { formatToVietnamTime } from '../../utils/dateTime';
 
 export default function Order() {
   const [orders, setOrders] = useState([]);
@@ -61,10 +62,7 @@ export default function Order() {
     return Number(amount).toLocaleString('vi-VN') + ' đ';
   };
 
-  const formatDate = (dateString) => {
-    if (!dateString) return '';
-    return new Date(dateString).toLocaleString('vi-VN');
-  };
+
 
   // Pagination Logic
   const totalPages = Math.ceil(orders.length / ITEMS_PER_PAGE) || 1;
@@ -162,7 +160,7 @@ export default function Order() {
                       {formatCurrency(order.total_amount)}
                     </td>
                     <td className={styles.td} style={{ textAlign: 'right', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                      {formatDate(order.ordered_at)}
+                      {formatToVietnamTime(order.ordered_at)}
                     </td>
                     <td className={styles.td}>
                       <div className={styles.actions} style={{ justifyContent: 'flex-end' }}>

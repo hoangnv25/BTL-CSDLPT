@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Truck, MapPin, CalendarBlank, ShoppingBag } from '@phosphor-icons/react';
 import styles from './PackageWareHourse.module.css';
+import { formatToVietnamTime } from '../../utils/dateTime';
 
 export default function PackageWareHourse({ warehouse_id = 1 }) {
   const [packages, setPackages] = useState([]);
@@ -58,10 +59,7 @@ export default function PackageWareHourse({ warehouse_id = 1 }) {
     }
   };
 
-  const formatDate = (dateString) => {
-    if (!dateString) return '';
-    return new Date(dateString).toLocaleString('vi-VN');
-  };
+
 
   const formatCurrency = (amount) => {
     if (!amount) return '0';
@@ -137,7 +135,7 @@ export default function PackageWareHourse({ warehouse_id = 1 }) {
                     <td className={styles.td} style={{ textAlign: 'right', fontSize: '13px', color: 'var(--text-secondary)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', justifyContent: 'flex-end' }}>
                         <CalendarBlank size={14} />
-                        {formatDate(pkg.created_at)}
+                        {formatToVietnamTime(pkg.created_at)}
                       </div>
                     </td>
                     <td className={styles.td} style={{ textAlign: 'right' }}>
