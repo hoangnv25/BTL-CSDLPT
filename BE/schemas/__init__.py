@@ -10,6 +10,7 @@ from BE.schemas.product import (
 from BE.schemas.user import UserCreate, UserLoginRequest, UserLoginResponse, UserOut
 from BE.schemas.warehouse import WarehouseCreate, WarehouseOut, WarehouseUpdate
 from BE.schemas.order import OrderCreate, OrderItemCreate, OrderOut, PackageItemOut, PackageOut
+from BE.schemas.package import PackageSimpleOut, PackageStatusUpdateRequest
 
 __all__ = [
     "UserCreate",
@@ -34,4 +35,6 @@ __all__ = [
     "PackageItemOut",
     "PackageOut",
     "OrderOut",
+    "PackageStatusUpdateRequest",
+    "PackageSimpleOut",
 ]

@@ -10,6 +10,7 @@ from BE.routers.product import router as product_router
 from BE.routers.user import router as user_router
 from BE.routers.warehouse import router as warehouse_router
 from BE.routers.order import router as order_router
+from BE.routers.package import router as package_router
 
 app = FastAPI(title="FastAPI + MySQL + Docker")
 
@@ -29,6 +30,7 @@ app.include_router(product_router)
 app.include_router(warehouse_router)
 app.include_router(inventory_router)
 app.include_router(order_router)
+app.include_router(package_router, prefix="/package", tags=["Package"])
 
 
 @app.on_event("startup")
