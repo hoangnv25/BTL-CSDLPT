@@ -10,6 +10,7 @@ export default function Inventory() {
   
   // Hash maps for quick lookup
   const [productMap, setProductMap] = useState({});
+  const [productCategoryMap, setProductCategoryMap] = useState({});
   const [warehouseMap, setWarehouseMap] = useState({});
   
   const [loading, setLoading] = useState(true);
@@ -39,8 +40,13 @@ export default function Inventory() {
       if (productRes.ok) {
         const pData = await productRes.json();
         const pMap = {};
-        pData.forEach(p => { pMap[p.id] = p.name; });
+        const pCatMap = {};
+        pData.forEach(p => { 
+          pMap[p.id] = p.name; 
+          pCatMap[p.id] = p.category_name;
+        });
         setProductMap(pMap);
+        setProductCategoryMap(pCatMap);
       }
       
       if (warehouseRes.ok) {
@@ -107,9 +113,12 @@ export default function Inventory() {
 
 
 
+  // Lọc chỉ giữ lại tồn kho của các sản phẩm còn đang hoạt động
+  const activeInventories = inventories.filter(inv => productMap[inv.product_id]);
+
   // Pagination Logic
-  const totalPages = Math.ceil(inventories.length / ITEMS_PER_PAGE) || 1;
-  const currentData = inventories.slice(
+  const totalPages = Math.ceil(activeInventories.length / ITEMS_PER_PAGE) || 1;
+  const currentData = activeInventories.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   );
@@ -126,7 +135,7 @@ export default function Inventory() {
     return (
       <div className={styles.pagination}>
         <span className={styles.pageInfo}>
-          Hiển thị {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, inventories.length)} trong tổng số {inventories.length} bản ghi
+          Hiển thị {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, activeInventories.length)} trong tổng số {activeInventories.length} bản ghi
         </span>
         <button className={styles.pageBtn} onClick={handlePrevPage} disabled={currentPage === 1}>
           Trước
@@ -176,8 +185,9 @@ export default function Inventory() {
             <thead>
               <tr>
                 <th className={styles.th} style={{ width: '8%' }}>ID</th>
-                <th className={styles.th} style={{ width: '35%' }}>Sản Phẩm</th>
-                <th className={styles.th} style={{ width: '20%' }}>Kho Hàng</th>
+                <th className={styles.th} style={{ width: '25%' }}>Sản Phẩm</th>
+                <th className={styles.th} style={{ width: '15%' }}>Danh Mục</th>
+                <th className={styles.th} style={{ width: '15%' }}>Kho Hàng</th>
                 <th className={styles.th} style={{ width: '15%', textAlign: 'center' }}>Số Lượng Tồn</th>
                 <th className={styles.th} style={{ width: '15%', textAlign: 'right' }}>Cập Nhật Cuối</th>
                 <th className={styles.th} style={{ width: '7%', textAlign: 'right' }}>Thao Tác</th>
@@ -186,11 +196,11 @@ export default function Inventory() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="6" className={styles.emptyState}>Đang tải dữ liệu...</td>
+                  <td colSpan="7" className={styles.emptyState}>Đang tải dữ liệu...</td>
                 </tr>
               ) : currentData.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className={styles.emptyState}>Không có dữ liệu tồn kho.</td>
+                  <td colSpan="7" className={styles.emptyState}>Không có dữ liệu tồn kho.</td>
                 </tr>
               ) : (
                 currentData.map((inv) => (
@@ -198,6 +208,9 @@ export default function Inventory() {
                     <td className={styles.td}>{inv.id}</td>
                     <td className={styles.td}>
                       <strong>{productMap[inv.product_id] || `Sản phẩm #${inv.product_id}`}</strong>
+                    </td>
+                    <td className={styles.td} style={{ color: 'var(--text-secondary)' }}>
+                      {productCategoryMap[inv.product_id] || 'Không rõ'}
                     </td>
                     <td className={styles.td} style={{ color: 'var(--text-secondary)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
@@ -228,7 +241,7 @@ export default function Inventory() {
             </tbody>
           </table>
         </div>
-        {!loading && inventories.length > 0 && renderPagination()}
+        {!loading && activeInventories.length > 0 && renderPagination()}
       </div>
 
       <InventoryModal 

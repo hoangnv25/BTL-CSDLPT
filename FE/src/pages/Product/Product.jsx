@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, PencilSimple, Eye } from '@phosphor-icons/react';
+import { Plus, PencilSimple, Eye, Trash, ArrowCounterClockwise } from '@phosphor-icons/react';
+import { message, Modal } from 'antd';
 import styles from './Product.module.css';
 import ProductModal from './ProductModal';
 import ProductDetailModal from './ProductDetailModal';
+
 
 export default function Product() {
   const [products, setProducts] = useState([]);
@@ -48,12 +50,12 @@ export default function Product() {
     setLoading(true);
     setError('');
     try {
-      let endpoint = `${API_BASE_URL}/product`;
+      let endpoint = `${API_BASE_URL}/product?include_deleted=true`;
       
       if (filterCategory) {
-        endpoint = `${API_BASE_URL}/product/by_category?category_id=${filterCategory}`;
+        endpoint = `${API_BASE_URL}/product/by_category?category_id=${filterCategory}&include_deleted=true`;
       } else if (filterWarehouse) {
-        endpoint = `${API_BASE_URL}/product/by_warehouse?warehouse_id=${filterWarehouse}`;
+        endpoint = `${API_BASE_URL}/product/by_warehouse?warehouse_id=${filterWarehouse}&include_deleted=true`;
       }
 
       const response = await fetch(endpoint);
@@ -108,6 +110,49 @@ export default function Product() {
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
+  };
+
+  const handleDeleteProduct = (id) => {
+    Modal.confirm({
+      title: 'Xác nhận xóa sản phẩm',
+      content: 'Bạn có chắc chắn muốn xóa sản phẩm này không? (Sản phẩm sẽ bị ngừng kinh doanh)',
+      okText: 'Xóa',
+      okType: 'danger',
+      cancelText: 'Hủy',
+      onOk: async () => {
+        try {
+          const response = await fetch(`${API_BASE_URL}/product/${id}`, {
+            method: 'DELETE',
+          });
+          if (!response.ok) throw new Error('Không thể xóa sản phẩm này.');
+          message.success('Xóa sản phẩm thành công!');
+          fetchProducts();
+        } catch (err) {
+          message.error(err.message);
+        }
+      }
+    });
+  };
+
+  const handleRestoreProduct = (id) => {
+    Modal.confirm({
+      title: 'Xác nhận khôi phục sản phẩm',
+      content: 'Bạn có chắc chắn muốn khôi phục sản phẩm này không?',
+      okText: 'Khôi phục',
+      cancelText: 'Hủy',
+      onOk: async () => {
+        try {
+          const response = await fetch(`${API_BASE_URL}/product/${id}/restore`, {
+            method: 'POST',
+          });
+          if (!response.ok) throw new Error('Không thể khôi phục sản phẩm này.');
+          message.success('Khôi phục sản phẩm thành công!');
+          fetchProducts();
+        } catch (err) {
+          message.error(err.message);
+        }
+      }
+    });
   };
 
   const formatCurrency = (amount) => {
@@ -199,30 +244,55 @@ export default function Product() {
           <table className={styles.table}>
             <thead>
               <tr>
-                <th className={styles.th} style={{ width: '10%' }}>ID</th>
-                <th className={styles.th} style={{ width: '35%' }}>Tên Sản Phẩm</th>
-                <th className={styles.th} style={{ width: '20%' }}>Danh Mục</th>
-                <th className={styles.th} style={{ width: '15%', textAlign: 'right' }}>Giá Bán</th>
-                <th className={styles.th} style={{ width: '10%', textAlign: 'center' }}>Tồn Kho</th>
+                <th className={styles.th} style={{ width: '8%' }}>ID</th>
+                <th className={styles.th} style={{ width: '32%' }}>Tên Sản Phẩm</th>
+                <th className={styles.th} style={{ width: '15%' }}>Danh Mục</th>
+                <th className={styles.th} style={{ width: '15%' }}>Trạng Thái</th>
+                <th className={styles.th} style={{ width: '12%', textAlign: 'right' }}>Giá Bán</th>
+                <th className={styles.th} style={{ width: '8%', textAlign: 'center' }}>Tồn Kho</th>
                 <th className={styles.th} style={{ width: '10%', textAlign: 'right' }}>Thao Tác</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="6" className={styles.emptyState}>Đang tải dữ liệu...</td>
+                  <td colSpan="7" className={styles.emptyState}>Đang tải dữ liệu...</td>
                 </tr>
               ) : currentData.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className={styles.emptyState}>Không tìm thấy sản phẩm nào phù hợp.</td>
+                  <td colSpan="7" className={styles.emptyState}>Không tìm thấy sản phẩm nào phù hợp.</td>
                 </tr>
               ) : (
                 currentData.map((prod) => (
-                  <tr key={prod.id} className={styles.tableRow}>
+                  <tr 
+                    key={prod.id} 
+                    className={styles.tableRow}
+                    style={prod.deleted_at ? { opacity: 0.6, backgroundColor: '#f9f9f9' } : {}}
+                  >
                     <td className={styles.td}>{prod.id}</td>
-                    <td className={styles.td}><strong>{prod.name}</strong></td>
+                    <td className={styles.td}>
+                      <strong>{prod.name}</strong>
+                      {prod.deleted_at && (
+                        <span className={styles.deletedBadge} style={{
+                          marginLeft: '8px',
+                          fontSize: '10px',
+                          backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                          color: '#dc3545',
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          fontWeight: '600'
+                        }}>Đã xóa</span>
+                      )}
+                    </td>
                     <td className={styles.td} style={{ color: 'var(--text-secondary)' }}>
                       {prod.category_name || 'Không rõ'}
+                    </td>
+                    <td className={styles.td}>
+                      {prod.deleted_at ? (
+                        <span style={{ color: '#dc3545', fontWeight: '500', fontSize: '13px' }}>Ngừng bán</span>
+                      ) : (
+                        <span style={{ color: '#28a745', fontWeight: '500', fontSize: '13px' }}>Đang bán</span>
+                      )}
                     </td>
                     <td className={styles.td} style={{ textAlign: 'right', fontWeight: '500' }}>
                       {formatCurrency(prod.price)}
@@ -240,13 +310,34 @@ export default function Product() {
                         >
                           <Eye size={16} weight="bold" />
                         </button>
-                        <button 
-                          className={`${styles.actionBtn} ${styles.editBtn}`} 
-                          title="Sửa"
-                          onClick={() => handleOpenEdit(prod)}
-                        >
-                          <PencilSimple size={16} weight="bold" />
-                        </button>
+                        {!prod.deleted_at ? (
+                          <>
+                            <button 
+                              className={`${styles.actionBtn} ${styles.editBtn}`} 
+                              title="Sửa"
+                              onClick={() => handleOpenEdit(prod)}
+                            >
+                              <PencilSimple size={16} weight="bold" />
+                            </button>
+                            <button 
+                              className={`${styles.actionBtn}`} 
+                              title="Xóa"
+                              onClick={() => handleDeleteProduct(prod.id)}
+                              style={{ color: '#dc3545' }}
+                            >
+                              <Trash size={16} weight="bold" />
+                            </button>
+                          </>
+                        ) : (
+                          <button 
+                            className={`${styles.actionBtn}`} 
+                            title="Khôi phục"
+                            onClick={() => handleRestoreProduct(prod.id)}
+                            style={{ color: '#28a745' }}
+                          >
+                            <ArrowCounterClockwise size={16} weight="bold" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

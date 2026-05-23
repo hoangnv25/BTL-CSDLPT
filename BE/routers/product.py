@@ -19,8 +19,11 @@ router = APIRouter(tags=["product"])
     response_model=list[ProductWithTotalStockOut],
     summary="Liệt kê toàn bộ sản phẩm",
 )
-def list_products(db: Session = Depends(get_db)) -> list[ProductWithTotalStockOut]:
-    return ProductService(db).list_products()
+def list_products(
+    include_deleted: bool = Query(False, description="Bao gồm cả sản phẩm đã xóa mềm"),
+    db: Session = Depends(get_db)
+) -> list[ProductWithTotalStockOut]:
+    return ProductService(db).list_products(include_deleted=include_deleted)
 
 @router.get(
     "/product/by_category",
@@ -29,9 +32,10 @@ def list_products(db: Session = Depends(get_db)) -> list[ProductWithTotalStockOu
 )
 def list_products_by_category(
     category_id: int = Query(...),
+    include_deleted: bool = Query(False, description="Bao gồm cả sản phẩm đã xóa mềm"),
     db: Session = Depends(get_db),
 ) -> list[ProductWithTotalStockOut]:
-    return ProductService(db).list_products_by_category(category_id)
+    return ProductService(db).list_products_by_category(category_id, include_deleted=include_deleted)
 
 @router.get(
     "/product/by_warehouse",
@@ -40,9 +44,10 @@ def list_products_by_category(
 )
 def list_products_by_warehouse(
     warehouse_id: int = Query(...),
+    include_deleted: bool = Query(False, description="Bao gồm cả sản phẩm đã xóa mềm"),
     db: Session = Depends(get_db),
 ) -> list[ProductWithWarehouseStockOut]:
-    return ProductService(db).list_products_by_warehouse(warehouse_id)
+    return ProductService(db).list_products_by_warehouse(warehouse_id, include_deleted=include_deleted)
 
 @router.post(
     "/product",
@@ -72,3 +77,20 @@ def update_product(
     db: Session = Depends(get_db),
 ) -> ProductOut:
     return ProductService(db).update_product(id, body)
+
+@router.delete(
+    "/product/{id}",
+    response_model=ProductOut,
+    summary="Xóa mềm sản phẩm",
+)
+def delete_product(id: int, db: Session = Depends(get_db)) -> ProductOut:
+    return ProductService(db).soft_delete_product(id)
+
+@router.post(
+    "/product/{id}/restore",
+    response_model=ProductOut,
+    summary="Khôi phục sản phẩm đã bị xóa mềm",
+)
+def restore_product(id: int, db: Session = Depends(get_db)) -> ProductOut:
+    return ProductService(db).restore_product(id)
+

@@ -18,6 +18,7 @@ class ProductOut(BaseModel):
     category_id: int
     category_name: str | None = None
     price: Decimal
+    deleted_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 

@@ -1,3 +1,4 @@
+from datetime import datetime
 from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -22,17 +23,19 @@ class ProductRepository:
         return row
 
     @staticmethod
-    def list_all(session: Session) -> list[Product]:
-        stmt = select(Product).order_by(Product.id)
+    def list_all(session: Session, include_deleted: bool = False) -> list[Product]:
+        stmt = select(Product)
+        if not include_deleted:
+            stmt = stmt.where(Product.deleted_at == None)
+        stmt = stmt.order_by(Product.id)
         return list(session.scalars(stmt).all())
 
     @staticmethod
-    def list_by_category(session: Session, category_id: int) -> list[Product]:
-        stmt = (
-            select(Product)
-            .where(Product.category_id == category_id)
-            .order_by(Product.id)
-        )
+    def list_by_category(session: Session, category_id: int, include_deleted: bool = False) -> list[Product]:
+        stmt = select(Product).where(Product.category_id == category_id)
+        if not include_deleted:
+            stmt = stmt.where(Product.deleted_at == None)
+        stmt = stmt.order_by(Product.id)
         return list(session.scalars(stmt).all())
 
     @staticmethod
@@ -52,3 +55,14 @@ class ProductRepository:
         row.category_id = category_id
         row.price = price
         return row
+
+    @staticmethod
+    def soft_delete(session: Session, row: Product) -> Product:
+        row.deleted_at = datetime.utcnow()
+        return row
+
+    @staticmethod
+    def restore(session: Session, row: Product) -> Product:
+        row.deleted_at = None
+        return row
+

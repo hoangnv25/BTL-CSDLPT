@@ -53,14 +53,15 @@ class ProductService:
             name=row.name,
             category_id=row.category_id,
             category_name=category.name,
-            price=row.price
+            price=row.price,
+            deleted_at=row.deleted_at
         )
 
-    def list_products(self) -> list[ProductWithTotalStockOut]:
+    def list_products(self, include_deleted: bool = False) -> list[ProductWithTotalStockOut]:
         from BE.services.inventory_service import InventoryService
         inv_service = InventoryService(self._session)
         
-        rows = self._product_repo.list_all(self._session)
+        rows = self._product_repo.list_all(self._session, include_deleted=include_deleted)
         categories = {c.id: c.name for c in self._category_repo.list_all(self._session)}
         
         result = []
@@ -73,19 +74,20 @@ class ProductService:
                     category_id=row.category_id,
                     category_name=categories.get(row.category_id),
                     price=row.price,
-                    total_stock=total_stock
+                    total_stock=total_stock,
+                    deleted_at=row.deleted_at
                 )
             )
         return result
 
-    def list_products_by_category(self, category_id: int) -> list[ProductWithTotalStockOut]:
+    def list_products_by_category(self, category_id: int, include_deleted: bool = False) -> list[ProductWithTotalStockOut]:
         category = self._category_repo.find_by_id(self._session, category_id)
         if not category:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Không tìm thấy danh mục sản phẩm.",
             )
-        rows = self._product_repo.list_by_category(self._session, category_id)
+        rows = self._product_repo.list_by_category(self._session, category_id, include_deleted=include_deleted)
         
         result = []
         for row in rows:
@@ -98,12 +100,13 @@ class ProductService:
                     category_id=row.category_id,
                     category_name=category.name,
                     price=row.price,
-                    total_stock=total_stock
+                    total_stock=total_stock,
+                    deleted_at=row.deleted_at
                 )
             )
         return result
 
-    def list_products_by_warehouse(self, warehouse_id: int) -> list[ProductWithWarehouseStockOut]:
+    def list_products_by_warehouse(self, warehouse_id: int, include_deleted: bool = False) -> list[ProductWithWarehouseStockOut]:
         from BE.repositories.warehouse_repository import WarehouseRepository
         wh = WarehouseRepository().find_by_id(self._session, warehouse_id)
         if not wh:
@@ -117,7 +120,7 @@ class ProductService:
         result = []
         for inv in invs:
             prod = self._product_repo.find_by_id(self._session, inv.product_id)
-            if prod:
+            if prod and (include_deleted or prod.deleted_at is None):
                 result.append(
                     ProductWithWarehouseStockOut(
                         id=prod.id,
@@ -125,7 +128,8 @@ class ProductService:
                         category_id=prod.category_id,
                         category_name=categories.get(prod.category_id),
                         price=prod.price,
-                        stock_quantity=inv.stock_quantity
+                        stock_quantity=inv.stock_quantity,
+                        deleted_at=prod.deleted_at
                     )
                 )
         return result
@@ -166,7 +170,8 @@ class ProductService:
             category_name=category_name,
             price=row.price,
             total_stock=total_stock,
-            inventory=inventory_list
+            inventory=inventory_list,
+            deleted_at=row.deleted_at
         )
 
     def update_product(self, id: int, body: ProductUpdate) -> ProductOut:
@@ -197,8 +202,54 @@ class ProductService:
             name=row.name,
             category_id=row.category_id,
             category_name=category.name,
-            price=row.price
+            price=row.price,
+            deleted_at=row.deleted_at
         )
+
+    def soft_delete_product(self, id: int) -> ProductOut:
+        row = self._product_repo.find_by_id(self._session, id)
+        if row is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Không tìm thấy sản phẩm.",
+            )
+        category = self._category_repo.find_by_id(self._session, row.category_id)
+        category_name = category.name if category else None
+
+        self._product_repo.soft_delete(self._session, row)
+        self._session.commit()
+        self._session.refresh(row)
+        return ProductOut(
+            id=row.id,
+            name=row.name,
+            category_id=row.category_id,
+            category_name=category_name,
+            price=row.price,
+            deleted_at=row.deleted_at
+        )
+
+    def restore_product(self, id: int) -> ProductOut:
+        row = self._product_repo.find_by_id(self._session, id)
+        if row is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Không tìm thấy sản phẩm.",
+            )
+        category = self._category_repo.find_by_id(self._session, row.category_id)
+        category_name = category.name if category else None
+
+        self._product_repo.restore(self._session, row)
+        self._session.commit()
+        self._session.refresh(row)
+        return ProductOut(
+            id=row.id,
+            name=row.name,
+            category_id=row.category_id,
+            category_name=category_name,
+            price=row.price,
+            deleted_at=row.deleted_at
+        )
+
 
     def _require_category(self, category_id: int) -> None:
         category = self._category_repo.find_by_id(self._session, category_id)

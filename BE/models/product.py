@@ -1,6 +1,7 @@
+from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import ForeignKey, Integer, Numeric, String
+from sqlalchemy import ForeignKey, Integer, Numeric, String, DateTime
 from sqlalchemy.orm import Mapped, mapped_column
 
 from BE.database import Base
@@ -15,3 +16,5 @@ class Product(Base):
         ForeignKey("categories.id"), nullable=False
     )
     price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+

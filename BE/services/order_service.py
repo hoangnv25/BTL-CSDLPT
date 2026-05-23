@@ -45,6 +45,19 @@ class OrderService:
             f"Khách hàng '{user.full_name}' (userId = {user.id}) hợp lệ.",
         )
 
+        # Chuẩn hóa: Gộp nhóm các sản phẩm trùng lặp và cộng dồn số lượng
+        merged_items = {}
+        for item in body.items:
+            if item.product_id not in merged_items:
+                merged_items[item.product_id] = 0
+            merged_items[item.product_id] += item.quantity
+
+        from BE.schemas.order import OrderItemCreate
+        body.items = [
+            OrderItemCreate(product_id=pid, quantity=qty)
+            for pid, qty in merged_items.items()
+        ]
+
         # 2. Kiểm tra Sản phẩm tồn tại & Tính tổng tiền tạm tính
         total_amount = Decimal("0.00")
         products_cache = {}
@@ -56,6 +69,12 @@ class OrderService:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Sản phẩm ID = {item.product_id} không tồn tại.",
+                )
+            if product.deleted_at is not None:
+                service_log("OrderService", f"LỖI: Sản phẩm với ID = {item.product_id} ('{product.name}') đã bị xóa mềm hoặc ngừng bán!")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Sản phẩm '{product.name}' đã ngừng kinh doanh hoặc bị xóa.",
                 )
             products_cache[item.product_id] = product
             item_total = product.price * item.quantity

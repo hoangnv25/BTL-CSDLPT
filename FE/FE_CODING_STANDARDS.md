@@ -1,4 +1,4 @@
-﻿# TIÊU CHUẨN LẬP TRÌNH FRONTEND (FE CODING STANDARDS)
+# TIÊU CHUẨN LẬP TRÌNH FRONTEND (FE CODING STANDARDS)
 > Hướng dẫn phát triển ngắn gọn, xúc tích dành riêng cho AI. Đọc và tuân thủ nghiêm ngặt.
 
 ---
@@ -66,6 +66,8 @@ Các thành phần giao diện lặp đi lặp lại nhiều lần (Modal, Card,
 * **Modal**: Tất cả modal phải dùng chung cấu trúc overlay mờ, bo góc `16px`, nút "Đóng" ở góc trên bên phải sử dụng icon Phosphor, và các nút hành động nằm dưới cùng bên phải.
 * **Card**: Bo góc `12px`, nền màu trắng mờ, có viền mờ `rgba(226, 232, 240, 0.8)`.
 * **Tag / Badge**: Các nhãn trạng thái phải có cùng padding (`0.25rem 0.75rem`), bo góc `9999px` (viên thuốc) và màu chữ đậm hơn màu nền tương ứng.
+* **Thông báo & Xác nhận (Notification & Confirmation)**: Tuyệt đối **KHÔNG** sử dụng `alert()` hoặc `window.confirm()` mặc định của trình duyệt để tránh làm giảm trải nghiệm người dùng. **BẮT BUỘC** sử dụng các API thông báo thẩm mỹ từ Ant Design như `message` để thông báo thành công/thất bại và `Modal.confirm` để hiển thị hộp thoại xác nhận thao tác.
+
 
 ---
 

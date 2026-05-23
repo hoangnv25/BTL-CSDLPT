@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Trash } from '@phosphor-icons/react';
+import { message } from 'antd';
 import styles from './Order.module.css';
+
 
 export default function OrderCreateModal({ isOpen, onClose, onSuccess }) {
   const [shippingAddress, setShippingAddress] = useState('');
@@ -42,6 +44,18 @@ export default function OrderCreateModal({ isOpen, onClose, onSuccess }) {
   };
 
   const handleItemChange = (index, field, value) => {
+    if (field === 'product_id' && value !== '') {
+      const duplicateIndex = items.findIndex((item, idx) => item.product_id === value && idx !== index);
+      if (duplicateIndex !== -1) {
+        // Cộng dồn quantity từ dòng hiện tại sang dòng trùng lặp đã chọn trước đó
+        const currentQty = parseInt(items[index].quantity) || 1;
+        const newItems = items.filter((_, idx) => idx !== index);
+        newItems[duplicateIndex].quantity = (parseInt(newItems[duplicateIndex].quantity) || 0) + currentQty;
+        setItems(newItems);
+        message.info('Sản phẩm đã có trong giỏ hàng. Đã tự động cộng dồn số lượng!');
+        return;
+      }
+    }
     const newItems = [...items];
     newItems[index][field] = value;
     setItems(newItems);
