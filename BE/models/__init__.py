@@ -6,6 +6,7 @@ from BE.models.warehouse import Warehouse
 from BE.models.order import Order
 from BE.models.package import Package
 from BE.models.package_detail import PackageDetail
+from BE.models.replication_log import ReplicationLog
 
 __all__ = [
     "User",
@@ -16,4 +17,5 @@ __all__ = [
     "Order",
     "Package",
     "PackageDetail",
+    "ReplicationLog",
 ]

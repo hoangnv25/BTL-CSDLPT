@@ -11,6 +11,13 @@ class CategoryRepository:
         return row
 
     @staticmethod
+    def create_with_id(session: Session, *, id: int, name: str) -> Category:
+        row = Category(id=id, name=name)
+        session.add(row)
+        session.flush()
+        return row
+
+    @staticmethod
     def list_all(session: Session) -> list[Category]:
         stmt = select(Category).order_by(Category.id)
         return list(session.scalars(stmt).all())

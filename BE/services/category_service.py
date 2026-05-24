@@ -1,19 +1,44 @@
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
+import json
 
 from BE.repositories.category_repository import CategoryRepository
 from BE.repositories.product_repository import ProductRepository
 from BE.schemas.category import CategoryCreate, CategoryOut, CategoryUpdate
+from BE.models.replication_log import ReplicationLog
+from BE.workers.replication_worker import replication_worker
 
 class CategoryService:
     def __init__(self, session: Session) -> None:
         self._session = session
         self._category_repo = CategoryRepository()
         self._product_repo = ProductRepository()
+        self._nodes = ["north", "central_region", "south"]
+
+    def _add_replication_logs(self, action: str, record_id: int, data_payload: str | None = None):
+        for node in self._nodes:
+            log = ReplicationLog(
+                table_name="category",
+                record_id=record_id,
+                action=action,
+                data_payload=data_payload,
+                target_node=node,
+                status="PENDING"
+            )
+            self._session.add(log)
 
     def create_category(self, body: CategoryCreate) -> CategoryOut:
         row = self._category_repo.create(self._session, name=body.name.strip())
+        self._session.flush() # ensure row has id
+        
+        self._add_replication_logs(
+            action="INSERT", 
+            record_id=row.id, 
+            data_payload=json.dumps({"name": row.name})
+        )
+        
         self._session.commit()
+        replication_worker.trigger() # Kích hoạt đồng bộ lập tức
         self._session.refresh(row)
         return CategoryOut.model_validate(row)
 
@@ -30,7 +55,15 @@ class CategoryService:
             )
 
         self._category_repo.update(row, name=body.name.strip())
+        
+        self._add_replication_logs(
+            action="UPDATE", 
+            record_id=row.id, 
+            data_payload=json.dumps({"name": row.name})
+        )
+        
         self._session.commit()
+        replication_worker.trigger() # Kích hoạt đồng bộ lập tức
         self._session.refresh(row)
         return CategoryOut.model_validate(row)
 
@@ -50,5 +83,12 @@ class CategoryService:
             )
 
         self._category_repo.delete(self._session, row)
+        
+        self._add_replication_logs(
+            action="DELETE", 
+            record_id=id
+        )
+        
         self._session.commit()
+        replication_worker.trigger() # Kích hoạt đồng bộ lập tức
         return {"message": "Xóa danh mục thành công."}

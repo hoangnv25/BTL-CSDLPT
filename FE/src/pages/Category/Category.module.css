@@ -330,3 +330,45 @@
 .pageBtnActive:hover {
   background: var(--primary-hover);
 }
+
+/* Nút Đồng bộ hệ thống */
+.syncBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 32px;
+  padding: 0 0.75rem;
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.syncBtn:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: #d0d0d0;
+}
+
+.syncBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Hiệu ứng xoay icon khi đang đồng bộ */
+.spin {
+  animation: spinAnimation 1s linear infinite;
+}
+
+@keyframes spinAnimation {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { notification } from 'antd';
 import Login from './pages/Login/Login';
 import Sidebar from './components/Sidebar/Sidebar';
 import Category from './pages/Category/Category';
@@ -30,6 +31,44 @@ function App() {
     role = 'manager';
     warehouseId = parseInt(currentOption.split('_')[1], 10);
   }
+
+  // WebSocket Connection for Replication Notifications
+  useEffect(() => {
+    let ws;
+    const connectWebSocket = () => {
+      ws = new WebSocket('ws://localhost:8000/ws/notifications');
+      
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'SYNC_ERROR') {
+            notification.error({
+              message: `Lỗi đồng bộ Site ${data.node?.toUpperCase()}`,
+              description: data.message,
+              duration: 5,
+              placement: 'topRight'
+            });
+          }
+        } catch (e) {
+          console.error("Failed to parse websocket message", e);
+        }
+      };
+
+      ws.onclose = () => {
+        // Attempt to reconnect after 3 seconds
+        setTimeout(connectWebSocket, 3000);
+      };
+    };
+
+    connectWebSocket();
+
+    return () => {
+      if (ws) {
+        ws.onclose = null; // Prevent reconnect loop on unmount
+        ws.close();
+      }
+    };
+  }, []);
 
   // Khi thay đổi Vai trò/Kho, nếu activeTab không thuộc quyền truy cập của vai trò mới,
   // tự động nhảy sang tab đầu tiên được cho phép để tránh giao diện trống hoặc lỗi

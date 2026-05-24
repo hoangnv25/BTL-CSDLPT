@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, PencilSimple, Trash } from '@phosphor-icons/react';
+import { Plus, PencilSimple, Trash, ArrowsClockwise } from '@phosphor-icons/react';
+import { message } from 'antd';
 import styles from './Category.module.css';
 import CategoryModal from './CategoryModal';
 
@@ -7,6 +8,7 @@ export default function Category() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [syncing, setSyncing] = useState(false);
 
   // State quản lý Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -58,6 +60,42 @@ export default function Category() {
       fetchCategories();
     } catch (err) {
       alert(err.message);
+    }
+  };
+
+  const handleSyncAll = async () => {
+    setSyncing(true);
+    const hide = message.loading('Đang đồng bộ dữ liệu tới các site nhánh...', 0);
+    try {
+      const nodes = ['north', 'central_region', 'south'];
+      const successNodes = [];
+      const failedNodes = [];
+
+      for (const node of nodes) {
+        try {
+          const res = await fetch(`${API_BASE_URL}/replication/sync-node/${node}`);
+          if (res.ok) {
+            successNodes.push(node === 'central_region' ? 'Miền Trung' : node === 'north' ? 'Miền Bắc' : 'Miền Nam');
+          } else {
+            failedNodes.push(node === 'central_region' ? 'Miền Trung' : node === 'north' ? 'Miền Bắc' : 'Miền Nam');
+          }
+        } catch (e) {
+          failedNodes.push(node === 'central_region' ? 'Miền Trung' : node === 'north' ? 'Miền Bắc' : 'Miền Nam');
+        }
+      }
+
+      hide();
+      if (failedNodes.length > 0) {
+        message.warning(`Đồng bộ thành công: ${successNodes.join(', ') || 'Không có'}. Thất bại: ${failedNodes.join(', ')}`);
+      } else {
+        message.success(`Đã đồng bộ toàn bộ dữ liệu thành công tới: ${successNodes.join(', ')}`);
+      }
+      fetchCategories();
+    } catch (err) {
+      hide();
+      message.error('Lỗi kết nối tới Backend khi thực hiện đồng bộ.');
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -122,10 +160,20 @@ export default function Category() {
     <div className={styles.pageContainer}>
       <div className={styles.header}>
         <h1 className={styles.title}>Danh Mục Sản Phẩm</h1>
-        <button className={styles.addBtn} onClick={handleOpenAdd}>
-          <Plus size={16} weight="bold" />
-          Thêm danh mục
-        </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button 
+            className={styles.syncBtn} 
+            onClick={handleSyncAll} 
+            disabled={syncing}
+          >
+            <ArrowsClockwise size={16} weight="bold" className={syncing ? styles.spin : ''} />
+            {syncing ? 'Đang đồng bộ...' : 'Đồng bộ hệ thống'}
+          </button>
+          <button className={styles.addBtn} onClick={handleOpenAdd}>
+            <Plus size={16} weight="bold" />
+            Thêm danh mục
+          </button>
+        </div>
       </div>
 
       {error && <div style={{ color: 'var(--danger-color)', fontSize: '14px' }}>{error}</div>}
