@@ -30,9 +30,9 @@ def build_node_url(prefix: str):
 
 # Multi-DB Phân tán
 DB_URLS = {
-    "central": DATABASE_URL,
+    "main": DATABASE_URL,
     "north": build_node_url("NORTH_DB"),
-    "central_region": build_node_url("CENTRAL_REGION_DB"),
+    "central": build_node_url("CENTRAL_DB"),
     "south": build_node_url("SOUTH_DB"),
 }
 
@@ -45,18 +45,18 @@ for site, url in DB_URLS.items():
         SessionLocals[site] = sessionmaker(autocommit=False, autoflush=False, bind=engines[site])
 
 # Default sẽ lấy db trung tâm
-engine = engines.get("central")
+engine = engines.get("main")
 if engine is None:
-    # Fallback to create from DATABASE_URL if CENTRAL_DB_URL was somehow empty and DATABASE_URL failed
+    # Fallback to create from DATABASE_URL if MAIN_DB_URL was somehow empty and DATABASE_URL failed
     engine = create_engine(DATABASE_URL, pool_pre_ping=True)
-    SessionLocals["central"] = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    SessionLocals["main"] = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-SessionLocal = SessionLocals["central"]
+SessionLocal = SessionLocals["main"]
 
 Base = declarative_base()
 
 def get_db() -> Generator[Session, None, None]:
-    """Get default database session (Central). Used by existing APIs."""
+    """Get default database session (Main). Used by existing APIs."""
     db = SessionLocal()
     try:
         yield db

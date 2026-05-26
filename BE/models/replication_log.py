@@ -12,7 +12,7 @@ class ReplicationLog(Base):
     record_id: Mapped[int] = mapped_column(Integer, nullable=False)
     action: Mapped[str] = mapped_column(String(20), nullable=False)  # INSERT, UPDATE, DELETE
     data_payload: Mapped[str | None] = mapped_column(Text, nullable=True) # JSON payload
-    target_node: Mapped[str] = mapped_column(String(50), nullable=False) # north, central_region, south
+    target_node: Mapped[str] = mapped_column(String(50), nullable=False) # north, central, south
     status: Mapped[str] = mapped_column(String(20), default="PENDING") # PENDING, SUCCESS, FAILED
     retry_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())

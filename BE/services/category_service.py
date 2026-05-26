@@ -13,7 +13,7 @@ class CategoryService:
         self._session = session
         self._category_repo = CategoryRepository()
         self._product_repo = ProductRepository()
-        self._nodes = ["north", "central_region", "south"]
+        self._nodes = ["north", "central", "south"]
 
     def _add_replication_logs(self, action: str, record_id: int, data_payload: str | None = None):
         for node in self._nodes:

@@ -33,8 +33,7 @@ class ReplicationWorker:
 
     def process_logs(self):
         with SessionLocal() as db:
-            # Lấy các log PENDING hoặc FAILED (retry_count < 3)
-            # Lọc theo next_retry_at <= now
+            # Lấy các log PENDING hoặc FAILED (retry_count < 3), lọc next_retry_at <= now
             now = datetime.now(timezone.utc)
             stmt = select(ReplicationLog).where(
                 ReplicationLog.status.in_(["PENDING", "FAILED"]),

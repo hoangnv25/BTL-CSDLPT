@@ -67,7 +67,7 @@ export default function Category() {
     setSyncing(true);
     const hide = message.loading('Đang đồng bộ dữ liệu tới các site nhánh...', 0);
     try {
-      const nodes = ['north', 'central_region', 'south'];
+      const nodes = ['north', 'central', 'south'];
       const successNodes = [];
       const failedNodes = [];
 
@@ -75,12 +75,12 @@ export default function Category() {
         try {
           const res = await fetch(`${API_BASE_URL}/replication/sync-node/${node}`);
           if (res.ok) {
-            successNodes.push(node === 'central_region' ? 'Miền Trung' : node === 'north' ? 'Miền Bắc' : 'Miền Nam');
+            successNodes.push(node === 'central' ? 'Miền Trung' : node === 'north' ? 'Miền Bắc' : 'Miền Nam');
           } else {
-            failedNodes.push(node === 'central_region' ? 'Miền Trung' : node === 'north' ? 'Miền Bắc' : 'Miền Nam');
+            failedNodes.push(node === 'central' ? 'Miền Trung' : node === 'north' ? 'Miền Bắc' : 'Miền Nam');
           }
         } catch (e) {
-          failedNodes.push(node === 'central_region' ? 'Miền Trung' : node === 'north' ? 'Miền Bắc' : 'Miền Nam');
+          failedNodes.push(node === 'central' ? 'Miền Trung' : node === 'north' ? 'Miền Bắc' : 'Miền Nam');
         }
       }
 
@@ -129,9 +129,9 @@ export default function Category() {
         <span className={styles.pageInfo}>
           Hiển thị {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, categories.length)} trong tổng số {categories.length} bản ghi
         </span>
-        <button 
-          className={styles.pageBtn} 
-          onClick={handlePrevPage} 
+        <button
+          className={styles.pageBtn}
+          onClick={handlePrevPage}
           disabled={currentPage === 1}
         >
           Trước
@@ -145,9 +145,9 @@ export default function Category() {
             {page}
           </button>
         ))}
-        <button 
-          className={styles.pageBtn} 
-          onClick={handleNextPage} 
+        <button
+          className={styles.pageBtn}
+          onClick={handleNextPage}
           disabled={currentPage === totalPages}
         >
           Sau
@@ -161,9 +161,9 @@ export default function Category() {
       <div className={styles.header}>
         <h1 className={styles.title}>Danh Mục Sản Phẩm</h1>
         <div style={{ display: 'flex', gap: '10px' }}>
-          <button 
-            className={styles.syncBtn} 
-            onClick={handleSyncAll} 
+          <button
+            className={styles.syncBtn}
+            onClick={handleSyncAll}
             disabled={syncing}
           >
             <ArrowsClockwise size={16} weight="bold" className={syncing ? styles.spin : ''} />
@@ -204,15 +204,15 @@ export default function Category() {
                     <td className={styles.td}><strong>{cat.name}</strong></td>
                     <td className={styles.td}>
                       <div className={styles.actions} style={{ justifyContent: 'flex-end' }}>
-                        <button 
-                          className={`${styles.actionBtn} ${styles.editBtn}`} 
+                        <button
+                          className={`${styles.actionBtn} ${styles.editBtn}`}
                           title="Sửa"
                           onClick={() => handleOpenEdit(cat)}
                         >
                           <PencilSimple size={16} weight="bold" />
                         </button>
-                        <button 
-                          className={`${styles.actionBtn} ${styles.deleteBtn}`} 
+                        <button
+                          className={`${styles.actionBtn} ${styles.deleteBtn}`}
                           title="Xóa"
                           onClick={() => handleDelete(cat.id)}
                         >
@@ -229,8 +229,8 @@ export default function Category() {
         {!loading && categories.length > 0 && renderPagination()}
       </div>
 
-      <CategoryModal 
-        isOpen={isModalOpen} 
+      <CategoryModal
+        isOpen={isModalOpen}
         onClose={handleCloseModal}
         initialData={selectedCategory}
         onSuccess={handleModalSuccess}

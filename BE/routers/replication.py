@@ -15,9 +15,9 @@ def full_sync_node(node_name: str):
     """
     category_repo = CategoryRepository()
     
-    with SessionLocal() as central_db:
-        central_categories = category_repo.list_all(central_db)
-        central_dict = {cat.id: cat for cat in central_categories}
+    with SessionLocal() as main_db:
+        main_categories = category_repo.list_all(main_db)
+        main_dict = {cat.id: cat for cat in main_categories}
         
         try:
             node_session = get_db_node(node_name)
@@ -31,7 +31,7 @@ def full_sync_node(node_name: str):
                 node_dict = {cat.id: cat for cat in node_categories}
                 
                 # Check for insertions / updates
-                for c_id, c_cat in central_dict.items():
+                for c_id, c_cat in main_dict.items():
                     if c_id not in node_dict:
                         # Insert
                         category_repo.create_with_id(node_db, id=c_id, name=c_cat.name)
@@ -41,7 +41,7 @@ def full_sync_node(node_name: str):
                 
                 # Check for deletions
                 for n_id, n_cat in node_dict.items():
-                    if n_id not in central_dict:
+                    if n_id not in main_dict:
                         category_repo.delete(node_db, n_cat)
                         
                 node_db.commit()
@@ -52,26 +52,25 @@ def full_sync_node(node_name: str):
                     ReplicationLog.target_node == node_name,
                     ReplicationLog.status.in_(["PENDING", "FAILED"])
                 )
-                stuck_logs = central_db.scalars(stmt).all()
+                stuck_logs = main_db.scalars(stmt).all()
                 for log in stuck_logs:
                     log.status = "SUCCESS" # Đã sync tay nên không cần chạy nữa
-                central_db.commit()
+                main_db.commit()
                 
         except Exception as e:
             print(f"Error during full sync for {node_name}: {e}")
 
 
 def initial_full_sync():
-    nodes = ["north", "central_region", "south"]
+    nodes = ["north", "central", "south"]
     for node in nodes:
         full_sync_node(node)
 
 
 @router.get("/sync-node/{node_name}")
 def sync_node_api(node_name: str):
-    if node_name not in ["north", "central_region", "south"]:
+    if node_name not in ["north", "central", "south"]:
         raise HTTPException(status_code=400, detail="Invalid node name")
-    
     try:
         full_sync_node(node_name)
         return {"message": f"Sync process completed for node {node_name}"}
