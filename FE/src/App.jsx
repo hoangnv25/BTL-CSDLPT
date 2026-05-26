@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { notification } from 'antd';
 import Login from './pages/Login/Login';
 import Sidebar from './components/Sidebar/Sidebar';
 import Category from './pages/Category/Category';
@@ -12,6 +11,7 @@ import PackageWareHourse from './pages/PackageWareHourse/PackageWareHourse';
 import MyOrder from './pages/MyOrder/MyOrder';
 import ProductView from './pages/ProductView/ProductView';
 import InventoryWareHourse from './pages/InventoryWareHourse/InventoryWareHourse';
+import NotificationBell from './components/NotificationBell/NotificationBell';
 import { roleAllowedPages } from './components/Sidebar/roles';
 
 function App() {
@@ -31,44 +31,6 @@ function App() {
     role = 'manager';
     warehouseId = parseInt(currentOption.split('_')[1], 10);
   }
-
-  // WebSocket Connection for Replication Notifications
-  useEffect(() => {
-    let ws;
-    const connectWebSocket = () => {
-      ws = new WebSocket('ws://localhost:8000/ws/notifications');
-      
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.type === 'SYNC_ERROR') {
-            notification.error({
-              message: `Lỗi đồng bộ Site ${data.node?.toUpperCase()}`,
-              description: data.message,
-              duration: 5,
-              placement: 'topRight'
-            });
-          }
-        } catch (e) {
-          console.error("Failed to parse websocket message", e);
-        }
-      };
-
-      ws.onclose = () => {
-        // Attempt to reconnect after 3 seconds
-        setTimeout(connectWebSocket, 3000);
-      };
-    };
-
-    connectWebSocket();
-
-    return () => {
-      if (ws) {
-        ws.onclose = null; // Prevent reconnect loop on unmount
-        ws.close();
-      }
-    };
-  }, []);
 
   // Khi thay đổi Vai trò/Kho, nếu activeTab không thuộc quyền truy cập của vai trò mới,
   // tự động nhảy sang tab đầu tiên được cho phép để tránh giao diện trống hoặc lỗi
@@ -121,14 +83,12 @@ function App() {
       case 'package':
         return <Package />;
       case 'package_warehouse':
-        // Sử dụng key={warehouseId} để buộc React remount & fetch lại dữ liệu mới khi đổi kho
         return <PackageWareHourse warehouse_id={warehouseId} key={`pkg-wh-${warehouseId}`} />;
       case 'my_order':
         return <MyOrder />;
       case 'product_view':
         return <ProductView />;
       case 'inventory_warehouse':
-        // Sử dụng key={warehouseId} để buộc React remount & fetch lại dữ liệu mới khi đổi kho
         return <InventoryWareHourse warehouse_id={warehouseId} key={`inv-wh-${warehouseId}`} />;
       default:
         return <div>Page Not Found</div>;
@@ -146,8 +106,11 @@ function App() {
         onOptionChange={setCurrentOption}
       />
       
-      <main style={{ flex: 1, overflowY: 'auto', padding: '2rem' }}>
+      <main style={{ flex: 1, overflowY: 'auto', padding: '2rem', position: 'relative' }}>
         {renderContent()}
+
+        {/* Component Chuông và Drawer thông báo đồng bộ */}
+        <NotificationBell />
       </main>
     </div>
   );

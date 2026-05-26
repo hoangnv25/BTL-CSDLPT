@@ -17,24 +17,26 @@ class ReplicationWorker:
         self._trigger_event.set()
 
     async def run(self):
+        loop = asyncio.get_running_loop()
         while True:
             try:
-                self.process_logs()
+                # Điều này giúp Event Loop của Uvicorn không bị block, phản hồi API của Main DB luôn tức thời!
+                await asyncio.to_thread(self.process_logs, loop)
             except Exception as e:
                 print(f"Replication worker error: {e}")
             
-            # Chạy ngay lập tức khi được trigger, hoặc tự động quét lại sau 60 giây
+            # Chạy ngay lập tức khi được trigger, hoặc tự động quét lại sau 3.0 giây
             try:
-                await asyncio.wait_for(self._trigger_event.wait(), timeout=60.0)
+                await asyncio.wait_for(self._trigger_event.wait(), timeout=3.0)
             except asyncio.TimeoutError:
                 pass
             finally:
                 self._trigger_event.clear()
 
-    def process_logs(self):
+    def process_logs(self, loop):
         with SessionLocal() as db:
             # Lấy các log PENDING hoặc FAILED (retry_count < 3), lọc next_retry_at <= now
-            now = datetime.now(timezone.utc)
+            now = datetime.utcnow()
             stmt = select(ReplicationLog).where(
                 ReplicationLog.status.in_(["PENDING", "FAILED"]),
                 ReplicationLog.retry_count < 3,
@@ -49,8 +51,13 @@ class ReplicationWorker:
                 else:
                     log.retry_count += 1
                     log.status = "FAILED"
-                    # Notify FE
-                    asyncio.create_task(self._notify_fe(log))
+                    # Cứu dữ liệu ra các biến trước khi session bị đóng để tránh lỗi DetachedInstanceError
+                    node = log.target_node
+                    action = log.action
+                    table_name = log.table_name
+                    retry_count = log.retry_count
+                    # Notify FE một cách an toàn từ luồng phụ về luồng chính (Main Event Loop)
+                    asyncio.run_coroutine_threadsafe(self._notify_fe(node, action, table_name, retry_count), loop)
                 
             db.commit()
 
@@ -71,7 +78,6 @@ class ReplicationWorker:
                         if existing:
                             self._category_repo.update(existing, name=data["name"])
                         else:
-                            # If it doesn't exist on node but we got an update, it means insert was missed.
                             self._category_repo.create_with_id(session, id=log.record_id, name=data["name"])
                             
                     elif log.action == "DELETE":
@@ -85,14 +91,14 @@ class ReplicationWorker:
             print(f"Sync failed for node {log.target_node}, log {log.id}: {e}")
             return False
 
-    async def _notify_fe(self, log: ReplicationLog):
+    async def _notify_fe(self, node: str, action: str, table_name: str, retry_count: int):
         message = {
             "type": "SYNC_ERROR",
-            "node": log.target_node,
-            "action": log.action,
-            "table": log.table_name,
-            "retry_count": log.retry_count,
-            "message": f"Không thể đồng bộ thao tác {log.action} trên bảng {log.table_name} tới site {log.target_node}. Đang thử lại lần {log.retry_count}/3."
+            "node": node,
+            "action": action,
+            "table": table_name,
+            "retry_count": retry_count,
+            "message": f"Không thể đồng bộ thao tác {action} trên bảng {table_name} tới site {node}. Đang thử lại lần {retry_count}/3."
         }
         await manager.broadcast(message)
 

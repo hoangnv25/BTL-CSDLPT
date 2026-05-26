@@ -8,10 +8,11 @@ from BE.repositories.category_repository import CategoryRepository
 
 router = APIRouter(prefix="/replication", tags=["Replication"])
 
-def full_sync_node(node_name: str):
+def full_sync_node(node_name: str) -> bool:
     """
     So sánh bảng Category ở Trung tâm và Node đích.
     Đắp dữ liệu nếu thiếu hoặc lệch.
+    Trả về True nếu đồng bộ thành công, False nếu có lỗi (Node sập).
     """
     category_repo = CategoryRepository()
     
@@ -23,7 +24,7 @@ def full_sync_node(node_name: str):
             node_session = get_db_node(node_name)
         except ValueError as e:
             print(f"Skipping sync for {node_name}: {e}")
-            return
+            return False
             
         try:
             with node_session as node_db:
@@ -56,9 +57,11 @@ def full_sync_node(node_name: str):
                 for log in stuck_logs:
                     log.status = "SUCCESS" # Đã sync tay nên không cần chạy nữa
                 main_db.commit()
+                return True
                 
         except Exception as e:
             print(f"Error during full sync for {node_name}: {e}")
+            return False
 
 
 def initial_full_sync():
@@ -71,11 +74,15 @@ def initial_full_sync():
 def sync_node_api(node_name: str):
     if node_name not in ["north", "central", "south"]:
         raise HTTPException(status_code=400, detail="Invalid node name")
-    try:
-        full_sync_node(node_name)
-        return {"message": f"Sync process completed for node {node_name}"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
+        
+    success = full_sync_node(node_name)
+    if not success:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Lỗi: Không thể kết nối tới site {node_name.upper()} để đồng bộ. Vui lòng kiểm tra lại Node!"
+        )
+        
+    return {"message": f"Đồng bộ thành công cho site {node_name.upper()}"}
 
 @router.get("/failed-nodes")
 def get_failed_nodes():

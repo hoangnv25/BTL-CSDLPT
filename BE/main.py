@@ -40,17 +40,37 @@ app.include_router(replication_router)
 
 @app.on_event("startup")
 async def on_startup() -> None:
-    # Khởi tạo bảng cho TẤT CẢ các Node (Trung tâm + 3 Chi nhánh)
     print("Khởi tạo cấu trúc bảng cho toàn bộ CSDL Phân tán...")
-    for site_name, db_engine in engines.items():
+    
+    # 1. Tạo tất cả các bảng ở Main DB (Trung tâm)
+    if "main" in engines:
         try:
-            Base.metadata.create_all(bind=db_engine)
+            Base.metadata.create_all(bind=engines["main"])
+            print("Đã khởi tạo toàn bộ cấu trúc bảng cho Main DB.")
+        except Exception as e:
+            print(f"Error: Không thể khởi tạo bảng cho Main DB: {e}")
+            
+    # 2. Tạo cấu trúc bảng cho các Node chi nhánh (Chỉ các bảng được chỉ định phân tán/nhân bản)
+    # Hiện tại chỉ có bảng 'categories' được nhân bản, sau này muốn thêm bảng nào chỉ cần thêm tên bảng vào đây.
+    DISTRIBUTED_TABLE_NAMES = ["categories"]
+    
+    node_tables = [
+        table for name, table in Base.metadata.tables.items()
+        if name in DISTRIBUTED_TABLE_NAMES
+    ]
+    
+    for site_name, db_engine in engines.items():
+        if site_name == "main":
+            continue
+        try:
+            Base.metadata.create_all(bind=db_engine, tables=node_tables)
+            print(f"Đã khởi tạo cấu trúc bảng phân tán cho Node: {site_name}")
         except Exception as e:
             print(f"Warning: Không thể tạo bảng cho {site_name}: {e}")
     
-    # Run initial full sync
-    print("Khởi chạy đồng bộ toàn phần...")
-    initial_full_sync()
+    # Run initial full sync in background thread
+    print("Khởi chạy đồng bộ toàn phần trong background...")
+    asyncio.create_task(asyncio.to_thread(initial_full_sync))
     
     # Start replication worker in background
     print("Khởi chạy worker đồng bộ...")
