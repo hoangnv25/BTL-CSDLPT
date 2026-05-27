@@ -23,6 +23,25 @@ class ProductRepository:
         return row
 
     @staticmethod
+    def create_with_id(
+        session: Session,
+        *,
+        id: int,
+        name: str,
+        category_id: int,
+        price: Decimal,
+    ) -> Product:
+        row = Product(
+            id=id,
+            name=name,
+            category_id=category_id,
+            price=price,
+        )
+        session.add(row)
+        session.flush()
+        return row
+
+    @staticmethod
     def list_all(session: Session, include_deleted: bool = False) -> list[Product]:
         stmt = select(Product)
         if not include_deleted:
@@ -57,7 +76,7 @@ class ProductRepository:
         return row
 
     @staticmethod
-    def soft_delete(session: Session, row: Product) -> Product:
+    def delete(session: Session, row: Product) -> Product:
         row.deleted_at = datetime.utcnow()
         return row
 

@@ -1,9 +1,12 @@
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
+import json
 
 from BE.repositories.category_repository import CategoryRepository
 from BE.repositories.product_repository import ProductRepository
 from BE.repositories.inventory_repository import InventoryRepository
+from BE.models.replication_log import ReplicationLog
+from BE.workers.replication_worker import replication_worker
 from BE.schemas.product import (
     ProductCreate,
     ProductOut,
@@ -20,6 +23,22 @@ class ProductService:
         self._category_repo = CategoryRepository()
         self._product_repo = ProductRepository()
         self._inventory_repo = InventoryRepository()
+        self._nodes = ["north", "central", "south"]
+
+    def _add_replication_logs(self, action: str, record_id: int, data_payload: str | None = None) -> list[int]:
+        log_ids = []
+        for node in self._nodes:
+            log = ReplicationLog(
+                table_name="product",
+                record_id=record_id,
+                action=action,
+                data_payload=data_payload,
+                target_node=node,
+                status="PENDING"
+            )
+            self._session.add(log)
+            log_ids.append(-1) # Placeholder since we don't need real IDs anymore
+        return log_ids
 
     def create_product(self, body: ProductCreate) -> ProductOut:
         category = self._category_repo.find_by_id(self._session, body.category_id)
@@ -46,16 +65,25 @@ class ProductService:
                 stock_quantity=0
             )
             
-        self._session.commit()
-        self._session.refresh(row)
-        return ProductOut(
-            id=row.id,
-            name=row.name,
-            category_id=row.category_id,
-            category_name=category.name,
-            price=row.price,
-            deleted_at=row.deleted_at
+        self._session.flush() # ensure id is generated
+        
+        log_ids = self._add_replication_logs(
+            action="INSERT", 
+            record_id=row.id, 
+            data_payload=json.dumps({
+                "name": row.name,
+                "category_id": row.category_id,
+                "price": float(row.price)
+            })
         )
+        
+        self._session.commit()
+        replication_worker.trigger()
+        # self._session.refresh(row)
+        
+        out = ProductOut.model_validate(row)
+        out.category_name = category.name
+        return out
 
     def list_products(self, include_deleted: bool = False) -> list[ProductWithTotalStockOut]:
         from BE.services.inventory_service import InventoryService
@@ -195,16 +223,24 @@ class ProductService:
             category_id=body.category_id,
             price=body.price,
         )
-        self._session.commit()
-        self._session.refresh(row)
-        return ProductOut(
-            id=row.id,
-            name=row.name,
-            category_id=row.category_id,
-            category_name=category.name,
-            price=row.price,
-            deleted_at=row.deleted_at
+        
+        self._add_replication_logs(
+            action="UPDATE", 
+            record_id=row.id, 
+            data_payload=json.dumps({
+                "name": row.name,
+                "category_id": row.category_id,
+                "price": float(row.price)
+            })
         )
+        
+        self._session.commit()
+        replication_worker.trigger()
+        # self._session.refresh(row)
+        
+        out = ProductOut.model_validate(row)
+        out.category_name = category.name
+        return out
 
     def soft_delete_product(self, id: int) -> ProductOut:
         row = self._product_repo.find_by_id(self._session, id)
@@ -216,17 +252,20 @@ class ProductService:
         category = self._category_repo.find_by_id(self._session, row.category_id)
         category_name = category.name if category else None
 
-        self._product_repo.soft_delete(self._session, row)
-        self._session.commit()
-        self._session.refresh(row)
-        return ProductOut(
-            id=row.id,
-            name=row.name,
-            category_id=row.category_id,
-            category_name=category_name,
-            price=row.price,
-            deleted_at=row.deleted_at
+        self._product_repo.delete(self._session, row)
+        
+        log_ids = self._add_replication_logs(
+            action="DELETE", 
+            record_id=row.id
         )
+        
+        self._session.commit()
+        replication_worker.trigger()
+        # self._session.refresh(row)
+        
+        out = ProductOut.model_validate(row)
+        out.category_name = category_name
+        return out
 
     def restore_product(self, id: int) -> ProductOut:
         row = self._product_repo.find_by_id(self._session, id)
@@ -239,17 +278,19 @@ class ProductService:
         category_name = category.name if category else None
 
         self._product_repo.restore(self._session, row)
-        self._session.commit()
-        self._session.refresh(row)
-        return ProductOut(
-            id=row.id,
-            name=row.name,
-            category_id=row.category_id,
-            category_name=category_name,
-            price=row.price,
-            deleted_at=row.deleted_at
+        
+        log_ids = self._add_replication_logs(
+            action="RESTORE", 
+            record_id=row.id
         )
-
+        
+        self._session.commit()
+        replication_worker.trigger()
+        # self._session.refresh(row)  <-- Bỏ refresh nếu không thực sự cần dữ liệu mới nhất ngay lập tức
+        
+        out = ProductOut.model_validate(row)
+        out.category_name = category_name
+        return out
 
     def _require_category(self, category_id: int) -> None:
         category = self._category_repo.find_by_id(self._session, category_id)

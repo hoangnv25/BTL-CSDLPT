@@ -6,11 +6,13 @@ import json
 from BE.database import SessionLocal, get_db_node
 from BE.models.replication_log import ReplicationLog
 from BE.repositories.category_repository import CategoryRepository
+from BE.repositories.product_repository import ProductRepository
 from BE.routers.websocket import manager
 
 class ReplicationWorker:
     def __init__(self):
         self._category_repo = CategoryRepository()
+        self._product_repo = ProductRepository()
         self._trigger_event = asyncio.Event()
 
     def trigger(self):
@@ -61,6 +63,33 @@ class ReplicationWorker:
                 
             db.commit()
 
+    def sync_logs_immediately(self, log_ids: list[int]) -> dict:
+        """
+        Đồng bộ ngay lập tức danh sách log và trả về trạng thái từng node.
+        Dùng cho phản hồi API ngay lập tức cho người dùng.
+        """
+        results = {}
+        with SessionLocal() as db:
+            stmt = select(ReplicationLog).where(ReplicationLog.id.in_(log_ids))
+            logs = db.scalars(stmt).all()
+            
+            for log in logs:
+                if log.status == "SUCCESS":
+                    results[log.target_node] = "SUCCESS"
+                    continue
+                    
+                success = self._sync_log(log)
+                if success:
+                    log.status = "SUCCESS"
+                    results[log.target_node] = "SUCCESS"
+                else:
+                    log.retry_count += 1
+                    log.status = "FAILED"
+                    results[log.target_node] = "FAILED"
+            
+            db.commit()
+        return results
+
     def _sync_log(self, log: ReplicationLog) -> bool:
         try:
             node_session = get_db_node(log.target_node)
@@ -84,6 +113,48 @@ class ReplicationWorker:
                         existing = self._category_repo.find_by_id(session, log.record_id)
                         if existing:
                             self._category_repo.delete(session, existing)
+
+                elif log.table_name == "product":
+                    if log.action == "INSERT":
+                        data = json.loads(log.data_payload)
+                        existing = self._product_repo.find_by_id(session, log.record_id)
+                        if not existing:
+                            self._product_repo.create_with_id(
+                                session, 
+                                id=log.record_id, 
+                                name=data["name"],
+                                category_id=data["category_id"],
+                                price=data["price"]
+                            )
+                    
+                    elif log.action == "UPDATE":
+                        data = json.loads(log.data_payload)
+                        existing = self._product_repo.find_by_id(session, log.record_id)
+                        if existing:
+                            self._product_repo.update(
+                                existing, 
+                                name=data["name"],
+                                category_id=data["category_id"],
+                                price=data["price"]
+                            )
+                        else:
+                            self._product_repo.create_with_id(
+                                session, 
+                                id=log.record_id, 
+                                name=data["name"],
+                                category_id=data["category_id"],
+                                price=data["price"]
+                            )
+
+                    elif log.action == "DELETE":
+                        existing = self._product_repo.find_by_id(session, log.record_id)
+                        if existing:
+                            self._product_repo.delete(session, existing)
+
+                    elif log.action == "RESTORE":
+                        existing = self._product_repo.find_by_id(session, log.record_id)
+                        if existing:
+                            self._product_repo.restore(session, existing)
                             
                 session.commit()
                 return True

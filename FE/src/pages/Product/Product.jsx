@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, PencilSimple, Eye, Trash, ArrowCounterClockwise } from '@phosphor-icons/react';
+import { Plus, PencilSimple, Eye, Trash, ArrowCounterClockwise, ArrowsClockwise } from '@phosphor-icons/react';
 import { message, Modal } from 'antd';
 import styles from './Product.module.css';
 import ProductModal from './ProductModal';
@@ -12,6 +12,7 @@ export default function Product() {
   const [warehouses, setWarehouses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [syncing, setSyncing] = useState(false);
   
   // State quản lý Filter
   const [filterCategory, setFilterCategory] = useState('');
@@ -93,6 +94,21 @@ export default function Product() {
     if (val) setFilterCategory(''); // Xóa filter Danh Mục
   };
 
+  const showSyncFeedback = (data) => {
+    if (!data.sync_results) return;
+
+    const failedNodes = Object.entries(data.sync_results)
+      .filter(([_, status]) => status === 'FAILED')
+      .map(([node, _]) => node === 'north' ? 'Miền Bắc' : node === 'central' ? 'Miền Trung' : 'Miền Nam');
+
+    if (failedNodes.length > 0) {
+      message.warning({
+        content: `Dữ liệu chính đã cập nhật, nhưng không thể đồng bộ tới: ${failedNodes.join(', ')}. Hệ thống sẽ tự động thử lại sau.`,
+        duration: 5,
+      });
+    }
+  };
+
   const handleOpenAdd = () => {
     setSelectedProduct(null);
     setIsModalOpen(true);
@@ -112,6 +128,14 @@ export default function Product() {
     setIsModalOpen(false);
   };
 
+  const handleModalSuccess = (data) => {
+    setIsModalOpen(false);
+    fetchProducts();
+    const actionText = selectedProduct ? 'Cập nhật' : 'Thêm';
+    message.success(`${actionText} sản phẩm thành công!`);
+    showSyncFeedback(data);
+  };
+
   const handleDeleteProduct = (id) => {
     Modal.confirm({
       title: 'Xác nhận xóa sản phẩm',
@@ -125,8 +149,10 @@ export default function Product() {
             method: 'DELETE',
           });
           if (!response.ok) throw new Error('Không thể xóa sản phẩm này.');
+          const data = await response.json();
           message.success('Xóa sản phẩm thành công!');
           fetchProducts();
+          showSyncFeedback(data);
         } catch (err) {
           message.error(err.message);
         }
@@ -146,13 +172,51 @@ export default function Product() {
             method: 'POST',
           });
           if (!response.ok) throw new Error('Không thể khôi phục sản phẩm này.');
+          const data = await response.json();
           message.success('Khôi phục sản phẩm thành công!');
           fetchProducts();
+          showSyncFeedback(data);
         } catch (err) {
           message.error(err.message);
         }
       }
     });
+  };
+
+  const handleSyncAll = async () => {
+    setSyncing(true);
+    const hide = message.loading('Đang đồng bộ dữ liệu tới các site nhánh...', 0);
+    try {
+      const nodes = ['north', 'central', 'south'];
+      const successNodes = [];
+      const failedNodes = [];
+
+      for (const node of nodes) {
+        try {
+          const res = await fetch(`${API_BASE_URL}/replication/sync-node/${node}`);
+          if (res.ok) {
+            successNodes.push(node === 'central' ? 'Miền Trung' : node === 'north' ? 'Miền Bắc' : 'Miền Nam');
+          } else {
+            failedNodes.push(node === 'central' ? 'Miền Trung' : node === 'north' ? 'Miền Bắc' : 'Miền Nam');
+          }
+        } catch (e) {
+          failedNodes.push(node === 'central' ? 'Miền Trung' : node === 'north' ? 'Miền Bắc' : 'Miền Nam');
+        }
+      }
+
+      hide();
+      if (failedNodes.length > 0) {
+        message.warning(`Đồng bộ thành công: ${successNodes.join(', ') || 'Không có'}. Thất bại: ${failedNodes.join(', ')}`);
+      } else {
+        message.success(`Đã đồng bộ toàn bộ dữ liệu thành công tới: ${successNodes.join(', ')}`);
+      }
+      fetchProducts();
+    } catch (err) {
+      hide();
+      message.error('Lỗi kết nối tới Backend khi thực hiện đồng bộ.');
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const formatCurrency = (amount) => {
@@ -204,10 +268,20 @@ export default function Product() {
     <div className={styles.pageContainer}>
       <div className={styles.header}>
         <h1 className={styles.title}>Quản Lý Sản Phẩm</h1>
-        <button className={styles.addBtn} onClick={handleOpenAdd}>
-          <Plus size={16} weight="bold" />
-          Thêm sản phẩm
-        </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button
+            className={styles.syncBtn}
+            onClick={handleSyncAll}
+            disabled={syncing}
+          >
+            <ArrowsClockwise size={16} weight="bold" className={syncing ? styles.spin : ''} />
+            {syncing ? 'Đang đồng bộ...' : 'Đồng bộ hệ thống'}
+          </button>
+          <button className={styles.addBtn} onClick={handleOpenAdd}>
+            <Plus size={16} weight="bold" />
+            Thêm sản phẩm
+          </button>
+        </div>
       </div>
 
       {/* Filter Toolbar */}
@@ -354,7 +428,7 @@ export default function Product() {
         onClose={handleCloseModal}
         initialData={selectedProduct}
         categories={categories}
-        onSuccess={() => { setIsModalOpen(false); fetchProducts(); }}
+        onSuccess={handleModalSuccess}
       />
       
       <ProductDetailModal

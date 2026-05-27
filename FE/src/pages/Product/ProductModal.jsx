@@ -60,7 +60,7 @@ export default function ProductModal({ isOpen, onClose, initialData, categories,
         throw new Error(data.detail?.[0]?.msg || data.detail || 'Có lỗi xảy ra');
       }
 
-      onSuccess();
+      onSuccess(data);
     } catch (err) {
       setError(err.message);
     } finally {
