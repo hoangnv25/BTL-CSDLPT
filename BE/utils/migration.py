@@ -260,3 +260,184 @@ def verify_and_initialize_missing_inventories():
         migration_log(f"TIMEOUT: Quá trình bù đắp tồn kho trên Node [{node}] không hoàn thành trong 0.5s. Đánh dấu OFFLINE.")
 
     migration_log("Hoàn tất kiểm tra đối chiếu và bù đắp tồn kho phân tán.")
+
+
+def migrate_main_packages_to_shards():
+    migration_log("Bắt đầu kiểm tra di trú dữ liệu kiện hàng từ main DB...")
+    if "main" not in engines:
+        migration_log("Không tìm thấy kết nối đến main DB. Hủy di trú.")
+        return
+
+    main_engine = engines["main"]
+    inspector = inspect(main_engine)
+    
+    # Kiểm tra xem bảng 'packages' có tồn tại ở main DB hay không
+    if "packages" not in inspector.get_table_names():
+        migration_log("Bảng 'packages' không tồn tại trên main DB. Không cần thực hiện di trú.")
+        return
+
+    migration_log("Phát hiện bảng 'packages' trên main DB. Bắt đầu quá trình di trú...")
+
+    with main_engine.connect() as main_conn:
+        try:
+            packages = main_conn.execute(text("SELECT id, order_id, warehouse_id, status, created_at FROM packages")).all()
+            migration_log(f"Đọc thành công {len(packages)} bản ghi kiện hàng từ main DB.")
+            
+            # Đọc chi tiết kiện hàng
+            package_details = []
+            if "package_details" in inspector.get_table_names():
+                package_details = main_conn.execute(text("SELECT id, package_id, product_id, quantity FROM package_details")).all()
+                migration_log(f"Đọc thành công {len(package_details)} chi tiết kiện hàng từ main DB.")
+
+            # Đọc danh sách kho hàng để định tuyến
+            warehouses_raw = main_conn.execute(text("SELECT id, region FROM warehouses")).all()
+            warehouse_regions = {w[0]: w[1] for w in warehouses_raw}
+        except Exception as e:
+            migration_log(f"LỖI: Không thể đọc dữ liệu kiện hàng từ main DB: {e}")
+            return
+
+        # Phân loại kiện hàng và chi tiết kiện hàng theo Node
+        node_packages = {"north": [], "central": [], "south": []}
+        package_id_to_node = {}
+
+        for pkg in packages:
+            pkg_id, order_id, warehouse_id, status, created_at = pkg
+            region = warehouse_regions.get(warehouse_id)
+            if not region:
+                migration_log(f"CẢNH BÁO: Không tìm thấy kho hàng (warehouse_id={warehouse_id}) cho kiện hàng ID={pkg_id}. Bỏ qua.")
+                continue
+            
+            node_key = None
+            if region in ["North", "RegionEnum.North"]:
+                node_key = "north"
+            elif region in ["Central", "RegionEnum.Central"]:
+                node_key = "central"
+            elif region in ["South", "RegionEnum.South"]:
+                node_key = "south"
+            else:
+                migration_log(f"CẢNH BÁO: Vùng miền '{region}' không hợp lệ cho kho {warehouse_id}. Bỏ qua.")
+                continue
+            
+            package_id_to_node[pkg_id] = node_key
+            node_packages[node_key].append({
+                "id": pkg_id,
+                "order_id": order_id,
+                "warehouse_id": warehouse_id,
+                "status": status,
+                "created_at": created_at,
+                "details": []
+            })
+
+        for detail in package_details:
+            dt_id, package_id, product_id, quantity = detail
+            node_key = package_id_to_node.get(package_id)
+            if not node_key:
+                migration_log(f"CẢNH BÁO: Chi tiết kiện hàng ID={dt_id} trỏ đến package_id={package_id} không hợp lệ. Bỏ qua.")
+                continue
+            
+            for p in node_packages[node_key]:
+                if p["id"] == package_id:
+                    p["details"].append({
+                        "id": dt_id,
+                        "package_id": package_id,
+                        "product_id": product_id,
+                        "quantity": quantity
+                    })
+                    break
+
+        # Ghi vào các Node phụ
+        for node_key, pkgs in node_packages.items():
+            if not pkgs:
+                continue
+            
+            if node_key not in engines:
+                migration_log(f"LỖI: Không cấu hình kết nối cho Node phụ '{node_key}'. Không thể di trú {len(pkgs)} kiện hàng.")
+                continue
+            
+            node_engine = engines[node_key]
+            migration_log(f"Đang ghi {len(pkgs)} kiện hàng vào Node phụ phân mảnh: [{node_key}]...")
+
+            with node_engine.begin() as node_conn:
+                try:
+                    node_conn.execute(text("SET FOREIGN_KEY_CHECKS = 0;"))
+                    
+                    for p in pkgs:
+                        exists = node_conn.execute(
+                            text("SELECT 1 FROM packages WHERE id = :id"),
+                            {"id": p["id"]}
+                        ).first()
+                        
+                        if not exists:
+                            node_conn.execute(
+                                text("""
+                                    INSERT INTO packages (id, order_id, warehouse_id, status, created_at)
+                                    VALUES (:id, :order_id, :warehouse_id, :status, :created_at)
+                                """),
+                                {
+                                    "id": p["id"],
+                                    "order_id": p["order_id"],
+                                    "warehouse_id": p["warehouse_id"],
+                                    "status": p["status"],
+                                    "created_at": p["created_at"]
+                                }
+                            )
+
+                        for d in p["details"]:
+                            det_exists = node_conn.execute(
+                                text("SELECT 1 FROM package_details WHERE id = :id"),
+                                {"id": d["id"]}
+                            ).first()
+                            
+                            if not det_exists:
+                                node_conn.execute(
+                                    text("""
+                                        INSERT INTO package_details (id, package_id, product_id, quantity)
+                                        VALUES (:id, :package_id, :product_id, :quantity)
+                                    """),
+                                    d
+                                )
+                    
+                    node_conn.execute(text("SET FOREIGN_KEY_CHECKS = 1;"))
+                    migration_log(f"Ghi thành công {len(pkgs)} kiện hàng vào Node phụ: [{node_key}].")
+                except Exception as e:
+                    migration_log(f"LỖI nghiêm trọng khi ghi kiện hàng vào Node phụ [{node_key}]: {e}")
+                    try:
+                        node_conn.execute(text("SET FOREIGN_KEY_CHECKS = 1;"))
+                    except:
+                        pass
+                    raise e
+
+        # Ghi bảng ánh xạ order_package_shards trên main DB
+        migration_log("Đang tạo bảng ánh xạ order_package_shards trên main DB...")
+        with main_engine.begin() as main_conn:
+            try:
+                for pkg_id, node_key in package_id_to_node.items():
+                    order_id = next(p["order_id"] for node_list in node_packages.values() for p in node_list if p["id"] == pkg_id)
+                    
+                    exists = main_conn.execute(
+                        text("SELECT 1 FROM order_package_shards WHERE package_id = :package_id"),
+                        {"package_id": pkg_id}
+                    ).first()
+                    
+                    if not exists:
+                        main_conn.execute(
+                            text("INSERT INTO order_package_shards (package_id, order_id, node_name) VALUES (:package_id, :order_id, :node_name)"),
+                            {"package_id": pkg_id, "order_id": order_id, "node_name": node_key}
+                        )
+                migration_log("Đã cập nhật bảng ánh xạ order_package_shards trên main DB.")
+            except Exception as e:
+                migration_log(f"LỖI khi tạo bảng ánh xạ order_package_shards: {e}")
+                raise e
+
+        # Dọn dẹp tables trên main DB
+        migration_log("Đang dọn dẹp các bảng packages và package_details trên main DB...")
+        with main_engine.begin() as main_conn:
+            try:
+                main_conn.execute(text("SET FOREIGN_KEY_CHECKS = 0;"))
+                main_conn.execute(text("DROP TABLE IF EXISTS package_details;"))
+                main_conn.execute(text("DROP TABLE IF EXISTS packages;"))
+                main_conn.execute(text("SET FOREIGN_KEY_CHECKS = 1;"))
+                migration_log("Đã DROP bảng 'packages' và 'package_details' trên main DB thành công. Hoàn tất quá trình di trú.")
+            except Exception as e:
+                migration_log(f"CẢNH BÁO: Không thể DROP bảng packages/package_details trên main DB: {e}")
+

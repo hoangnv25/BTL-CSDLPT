@@ -7,6 +7,7 @@ from BE.models.order import Order
 from BE.models.package import Package
 from BE.models.package_detail import PackageDetail
 from BE.models.replication_log import ReplicationLog
+from BE.models.order_package_shard import OrderPackageShard
 
 __all__ = [
     "User",
@@ -18,4 +19,5 @@ __all__ = [
     "Package",
     "PackageDetail",
     "ReplicationLog",
+    "OrderPackageShard",
 ]

@@ -87,70 +87,100 @@ class OrderService:
         service_log("OrderService", f"Tổng tiền đơn hàng tạm tính: {total_amount}")
 
         # Khởi động Transaction & Khóa dòng tồn kho (with_for_update) chống race conditions
-        service_log("OrderService", "Bắt đầu khóa tồn kho toàn cục và thực hiện kiểm tra lượng hàng đáp ứng...")
+        service_log("OrderService", "Bắt đầu mở các kết nối/transaction đến các Node phụ...")
         
-        allocations = {}  # { warehouse_id: [ (product_id, quantity) ] }
+        # 1. Truy vấn các warehouses từ main DB để biết phân vùng miền (Region) của từng warehouse
+        from BE.models.warehouse import Warehouse
+        warehouses_list = self._session.query(Warehouse).all()
+        warehouse_regions = {w.id: w.region.value.lower() for w in warehouses_list}
+        
+        from BE.database import get_db_node, circuit_breaker
+        from BE.models.order_package_shard import OrderPackageShard
+
+        # Mở các phiên làm việc (Session) với các Node phụ đang ONLINE
+        nodes = ["north", "central", "south"]
+        node_sessions = {}
+        for node in nodes:
+            if circuit_breaker.is_available(node):
+                try:
+                    sess = get_db_node(node)
+                    sess.begin()
+                    node_sessions[node] = sess
+                    service_log("OrderService", f" -> Khởi động transaction thành công trên Node phụ: [{node}]")
+                except Exception as e:
+                    circuit_breaker.mark_failure(node)
+                    service_log("OrderService", f"CẢNH BÁO: Lỗi mở kết nối đến Node [{node}]: {e}")
+            else:
+                service_log("OrderService", f" -> Bỏ qua Node [{node}] do Circuit Breaker báo OFFLINE.")
+
+        allocations = {}  # { warehouse_id: { 'node': str, 'items': [ (product_id, quantity) ] } }
 
         # 3. Kiểm tra Tổng tồn kho & Phân bổ kho hàng
-        for item in body.items:
-            product = products_cache[item.product_id]
-            # Truy vấn tồn kho có khóa bi quan dòng (Pessimistic Lock)
-            inventories = (
-                self._session.query(Inventory)
-                .filter(Inventory.product_id == item.product_id)
-                .with_for_update()
-                .all()
-            )
-
-            total_stock = sum(inv.stock_quantity for inv in inventories)
-            service_log(
-                "OrderService",
-                f"Kiểm tra sản phẩm '{product.name}' (ID={product.id}): Yêu cầu: {item.quantity} | Tổng tồn toàn hệ thống: {total_stock}",
-            )
-
-            if total_stock < item.quantity:
+        try:
+            for item in body.items:
+                product = products_cache[item.product_id]
+                
+                # Gom các bản ghi tồn kho từ tất cả các Node phụ đang hoạt động
+                inventories = []
+                for node, sess in node_sessions.items():
+                    try:
+                        # Khóa dòng bi quan trên Node phụ tương ứng
+                        node_invs = sess.query(Inventory).filter(Inventory.product_id == item.product_id).with_for_update().all()
+                        inventories.extend(node_invs)
+                    except Exception as e:
+                        service_log("OrderService", f"CẢNH BÁO: Lỗi đọc inventories từ Node [{node}] cho SP ID={item.product_id}: {e}")
+                
+                total_stock = sum(inv.stock_quantity for inv in inventories)
                 service_log(
                     "OrderService",
-                    f"LỖI: Không đủ hàng cho sản phẩm '{product.name}'! Thiếu hụt: {item.quantity - total_stock} sản phẩm.",
+                    f"Kiểm tra sản phẩm '{product.name}' (ID={product.id}): Yêu cầu: {item.quantity} | Tổng tồn toàn hệ thống: {total_stock}",
                 )
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Sản phẩm {product.name} không đủ số lượng tồn kho (Yêu cầu: {item.quantity}, Hiện có: {total_stock}).",
-                )
-            
-            # Sắp xếp kho hàng theo tồn giảm dần (Greedy Allocation)
-            inventories_sorted = sorted(inventories, key=lambda x: x.stock_quantity, reverse=True)
-            
-            remaining = item.quantity
-            service_log("OrderService", f"Bắt đầu phân bổ sản phẩm '{product.name}' từ các kho hàng:")
-            for inv in inventories_sorted:
-                if remaining <= 0:
-                    break
 
-                allocated = min(remaining, inv.stock_quantity)
-                if allocated > 0:
-                    # Trừ tồn kho trong DB
-                    old_stock = inv.stock_quantity
-                    inv.stock_quantity -= allocated
-                    inv.updated_at = datetime.utcnow()
-                    
+                if total_stock < item.quantity:
                     service_log(
                         "OrderService",
-                        f" -> Chọn Kho ID = {inv.warehouse_id} để cung ứng {allocated} sản phẩm (Tồn cũ: {old_stock} -> Tồn mới: {inv.stock_quantity})",
+                        f"LỖI: Không đủ hàng cho sản phẩm '{product.name}'! Thiếu hụt: {item.quantity - total_stock} sản phẩm.",
                     )
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Sản phẩm {product.name} không đủ số lượng tồn kho (Yêu cầu: {item.quantity}, Hiện có: {total_stock}).",
+                    )
+                
+                # Sắp xếp kho hàng theo tồn giảm dần (Greedy Allocation)
+                inventories_sorted = sorted(inventories, key=lambda x: x.stock_quantity, reverse=True)
+                
+                remaining = item.quantity
+                service_log("OrderService", f"Bắt đầu phân bổ sản phẩm '{product.name}' từ các kho hàng:")
+                for inv in inventories_sorted:
+                    if remaining <= 0:
+                        break
 
-                    # Ghi nhận phân bổ
-                    if inv.warehouse_id not in allocations:
-                        allocations[inv.warehouse_id] = []
-                    allocations[inv.warehouse_id].append((item.product_id, allocated))
-                    
-                    remaining -= allocated
+                    allocated = min(remaining, inv.stock_quantity)
+                    if allocated > 0:
+                        # Trừ tồn kho trên Node phụ tương ứng
+                        old_stock = inv.stock_quantity
+                        inv.stock_quantity -= allocated
+                        inv.updated_at = datetime.utcnow()
+                        
+                        service_log(
+                            "OrderService",
+                            f" -> Chọn Kho ID = {inv.warehouse_id} để cung ứng {allocated} sản phẩm (Tồn cũ: {old_stock} -> Tồn mới: {inv.stock_quantity})",
+                        )
 
-        service_log("OrderService", "Đã phân bổ tồn kho thành công! Khởi tạo các thực thể Đơn hàng và Kiện hàng...")
+                        # Ghi nhận phân bổ
+                        if inv.warehouse_id not in allocations:
+                            allocations[inv.warehouse_id] = {
+                                "node": warehouse_regions.get(inv.warehouse_id),
+                                "items": []
+                            }
+                        allocations[inv.warehouse_id]["items"].append((item.product_id, allocated))
+                        
+                        remaining -= allocated
 
-        # 4. Ghi nhận dữ liệu vào Database
-        try:
-            # 4.1 Tạo Order
+            service_log("OrderService", "Đã phân bổ tồn kho thành công! Ghi nhận Đơn hàng trên Main DB...")
+
+            # 4. Ghi nhận dữ liệu vào Database
+            # 4.1 Tạo Order trên Main DB
             order = Order(
                 user_id=body.user_id,
                 shipping_address=body.shipping_address,
@@ -159,42 +189,63 @@ class OrderService:
             )
             self._session.add(order)
             self._session.flush()
-            service_log("OrderService", f"Đã tạo thành công Đơn hàng (Order ID = {order.id}) trong phiên giao dịch.")
+            service_log("OrderService", f"Đã chèn và cấp phát Order ID = {order.id} thành công trên Main DB.")
 
-            from BE.models.warehouse import Warehouse
             from BE.models.category import Category
             from BE.schemas.warehouse import WarehouseOut
             from BE.schemas.product import ProductOut
 
             warehouses = {w.id: WarehouseOut(id=w.id, name=w.name, region=w.region, address=w.address) 
-                          for w in self._session.query(Warehouse).filter(Warehouse.id.in_(allocations.keys())).all()}
+                          for w in warehouses_list if w.id in allocations}
             categories = {c.id: c.name for c in self._session.query(Category).all()}
 
             packages_out_list = []
 
-            # 4.2 Tạo các Packages & PackageDetails tương ứng
-            for warehouse_id, items_allocated in allocations.items():
+            # 4.2 Tạo các Packages & PackageDetails trên các Node phụ tương ứng
+            for warehouse_id, alloc_info in allocations.items():
+                node_key = alloc_info["node"]
+                n_sess = node_sessions.get(node_key)
+                if not n_sess:
+                    service_log("OrderService", f"LỖI: Node [{node_key}] của kho {warehouse_id} không hoạt động nhưng được phân bổ.")
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail=f"Lỗi tạo đơn hàng: Node [{node_key}] chứa dữ liệu kho {warehouse_id} đang ngoại tuyến."
+                    )
+                
+                # Tạo Package trên Node phụ
                 package = Package(
                     order_id=order.id,
                     warehouse_id=warehouse_id,
                     status=PackageStatusEnum.Pending,
                     created_at=datetime.utcnow(),
                 )
-                self._session.add(package)
-                self._session.flush()
+                n_sess.add(package)
+                n_sess.flush()
                 service_log(
                     "OrderService",
-                    f" -> Đã tạo Kiện hàng (Package ID = {package.id}) cho nhà kho ID = {warehouse_id}",
+                    f" -> Đã tạo Kiện hàng (Package ID = {package.id}) trên Node phụ [{node_key}] cho nhà kho ID = {warehouse_id}",
+                )
+
+                # Tạo ánh xạ OrderPackageShard trên Main DB
+                mapping = OrderPackageShard(
+                    package_id=package.id,
+                    order_id=order.id,
+                    node_name=node_key
+                )
+                self._session.add(mapping)
+                service_log(
+                    "OrderService",
+                    f"   -> Lưu ánh xạ kiện hàng ID={package.id} -> Node [{node_key}] trên Main DB."
                 )
 
                 package_items_list = []
-                for product_id, qty in items_allocated:
+                for product_id, qty in alloc_info["items"]:
                     detail = PackageDetail(
                         package_id=package.id,
                         product_id=product_id,
                         quantity=qty,
                     )
-                    self._session.add(detail)
+                    n_sess.add(detail)
                     
                     prod = products_cache[product_id]
                     prod_out = ProductOut(
@@ -209,7 +260,7 @@ class OrderService:
                     )
                     service_log(
                         "OrderService",
-                        f"     -> Thêm Chi tiết kiện hàng: Sản phẩm ID = {product_id}, Số lượng = {qty}",
+                        f"     -> Thêm Chi tiết kiện hàng trên Node [{node_key}]: Sản phẩm ID = {product_id}, Số lượng = {qty}",
                     )
 
                 packages_out_list.append(
@@ -221,12 +272,17 @@ class OrderService:
                     )
                 )
 
-            # Commit Transaction
+            # Commit giao dịch trên Main DB và tất cả các Node phụ liên quan
             self._session.commit()
-            service_log(
-                "OrderService",
-                f"Giao dịch hoàn tất thành công! Commit thành công Đơn hàng ID = {order.id}.",
-            )
+            service_log("OrderService", "Đã commit thành công đơn hàng và ánh xạ trên Main DB.")
+            
+            for node, sess in node_sessions.items():
+                try:
+                    sess.commit()
+                    service_log("OrderService", f"Đã commit thành công tồn kho & kiện hàng trên Node phụ [{node}].")
+                except Exception as e:
+                    service_log("OrderService", f"CẢNH BÁO: Lỗi commit trên Node phụ [{node}]: {e}")
+                    raise e
 
             return OrderOut(
                 order_id=order.id,
@@ -238,15 +294,24 @@ class OrderService:
             )
 
         except Exception as e:
+            # Rollback tất cả các session
             self._session.rollback()
-            service_log(
-                "OrderService",
-                f"LỖI HỆ THỐNG: Có lỗi xảy ra trong quá trình ghi dữ liệu: {str(e)}. Tiến hành Rollback toàn bộ giao dịch!",
-            )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Lỗi tạo đơn hàng: {str(e)}",
-            )
+            service_log("OrderService", f"Đã rollback giao dịch trên Main DB. Chi tiết lỗi: {e}")
+            for node, sess in node_sessions.items():
+                try:
+                    sess.rollback()
+                    service_log("OrderService", f"Đã rollback giao dịch trên Node phụ [{node}].")
+                except Exception as roll_err:
+                    pass
+            raise e
+        finally:
+            # Đóng tất cả các session node phụ
+            for node, sess in node_sessions.items():
+                try:
+                    sess.close()
+                    service_log("OrderService", f"Đã đóng session kết nối đến Node phụ [{node}].")
+                except:
+                    pass
 
     def list_orders(self) -> list[OrderListOut]:
         orders = self._session.query(Order).order_by(Order.id.desc()).all()
@@ -293,8 +358,10 @@ class OrderService:
         return result
 
     def get_order(self, order_id: int) -> OrderOut:
+        service_log("OrderService", f"Bắt đầu lấy thông tin chi tiết đơn hàng ID={order_id}")
         order = self._session.query(Order).filter(Order.id == order_id).first()
         if not order:
+            service_log("OrderService", f"LỖI: Không tìm thấy đơn hàng ID={order_id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Không tìm thấy đơn hàng.",
@@ -303,46 +370,82 @@ class OrderService:
         user = self._session.query(User).filter(User.id == order.user_id).first()
         user_out = UserOut(id=user.id, username=user.username, full_name=user.full_name) if user else None
 
-        packages = self._session.query(Package).filter(Package.order_id == order_id).all()
-        package_ids = [p.id for p in packages]
-        details = self._session.query(PackageDetail).filter(PackageDetail.package_id.in_(package_ids)).all() if package_ids else []
+        # 1. Đọc bảng ánh xạ từ Main DB
+        from BE.models.order_package_shard import OrderPackageShard
+        shard_mappings = self._session.query(OrderPackageShard).filter(OrderPackageShard.order_id == order_id).all()
+        target_nodes = list(set(m.node_name for m in shard_mappings))
+        service_log("OrderService", f"Ánh xạ chỉ ra các Node chứa kiện hàng của đơn hàng: {target_nodes}")
 
+        packages_data = []
+        
+        # Nếu chưa có ánh xạ nào (có thể là đơn hàng cũ trước khi sharding), thực hiện quét trên cả 3 Node
+        if not target_nodes:
+            service_log("OrderService", f"Không tìm thấy ánh xạ. Fallback thực hiện Scatter-Gather trên cả 3 Node phụ...")
+            target_nodes = ["north", "central", "south"]
+
+        # 2. Truy vấn kiện hàng từ đúng các Node phụ được chỉ định
+        from BE.database import get_db_node, circuit_breaker
+        for node in target_nodes:
+            if not circuit_breaker.is_available(node):
+                service_log("OrderService", f"Circuit Breaker: Bỏ qua Node [{node}] đang ngoại tuyến.")
+                continue
+            try:
+                node_session = get_db_node(node)
+                with node_session:
+                    node_pkgs = node_session.query(Package).filter(Package.order_id == order_id).all()
+                    for p in node_pkgs:
+                        # Đọc chi tiết kiện hàng cục bộ
+                        details_list = []
+                        node_details = node_session.query(PackageDetail).filter(PackageDetail.package_id == p.id).all()
+                        for d in node_details:
+                            details_list.append({
+                                "product_id": d.product_id,
+                                "quantity": d.quantity
+                            })
+                        packages_data.append({
+                            "id": p.id,
+                            "warehouse_id": p.warehouse_id,
+                            "status": p.status,
+                            "items": details_list
+                        })
+                service_log("OrderService", f" -> Lấy thành công {len(node_pkgs)} kiện hàng từ Node phụ [{node}]")
+            except Exception as e:
+                service_log("OrderService", f"CẢNH BÁO: Lỗi đọc kiện hàng trên Node [{node}]: {e}")
+
+        # 3. Lấy thông tin phụ trợ (Warehouses, Products, Categories) từ Main DB
         from BE.models.warehouse import Warehouse
         from BE.models.category import Category
         from BE.schemas.warehouse import WarehouseOut
         from BE.schemas.product import ProductOut
 
-        warehouse_ids = {p.warehouse_id for p in packages}
+        warehouse_ids = {p["warehouse_id"] for p in packages_data}
         warehouses = {w.id: WarehouseOut(id=w.id, name=w.name, region=w.region, address=w.address) 
                       for w in self._session.query(Warehouse).filter(Warehouse.id.in_(warehouse_ids)).all()} if warehouse_ids else {}
 
-        product_ids = {d.product_id for d in details}
+        product_ids = {item["product_id"] for p in packages_data for item in p["items"]}
         products = self._session.query(Product).filter(Product.id.in_(product_ids)).all() if product_ids else []
         categories = {c.id: c.name for c in self._session.query(Category).all()}
         products_out = {p.id: ProductOut(id=p.id, name=p.name, category_id=p.category_id, category_name=categories.get(p.category_id), price=p.price) 
                         for p in products}
 
-        # Group package details by package_id
-        details_by_package = {}
-        for d in details:
-            if d.package_id not in details_by_package:
-                details_by_package[d.package_id] = []
-            prod_out = products_out.get(d.product_id)
-            if prod_out:
-                details_by_package[d.package_id].append(
-                    PackageItemOut(product=prod_out, quantity=d.quantity)
-                )
-
+        # 4. Định dạng kết quả trả về
         packages_out_list = []
-        for p in packages:
-            wh_out = warehouses.get(p.warehouse_id)
+        for p in packages_data:
+            wh_out = warehouses.get(p["warehouse_id"])
             if wh_out:
+                package_items_list = []
+                for item in p["items"]:
+                    prod_out = products_out.get(item["product_id"])
+                    if prod_out:
+                        package_items_list.append(
+                            PackageItemOut(product=prod_out, quantity=item["quantity"])
+                        )
                 packages_out_list.append(
                     PackageOut(
-                        package_id=p.id,
+                        package_id=p["id"],
                         warehouse=wh_out,
-                        status=p.status.value,
-                        items=details_by_package.get(p.id, [])
+                        status=p["status"].value,
+                        items=package_items_list
                     )
                 )
 
