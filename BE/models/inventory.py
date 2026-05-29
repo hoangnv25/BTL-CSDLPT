@@ -14,7 +14,7 @@ class Inventory(Base):
         ForeignKey("products.id"), nullable=False
     )
     warehouse_id: Mapped[int] = mapped_column(
-        ForeignKey("warehouses.id"), nullable=False
+        Integer, nullable=False
     )
     stock_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     updated_at: Mapped[datetime] = mapped_column(

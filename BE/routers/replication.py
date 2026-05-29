@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
-from BE.database import SessionLocal, get_db_node
+from BE.database import SessionLocal, get_db_node, circuit_breaker
 from BE.models.category import Category
 from BE.models.replication_log import ReplicationLog
 from BE.repositories.category_repository import CategoryRepository
@@ -14,6 +14,10 @@ def full_sync_node(node_name: str) -> bool:
     Đắp dữ liệu nếu thiếu hoặc lệch.
     Trả về True nếu đồng bộ thành công, False nếu có lỗi (Node sập).
     """
+    if not circuit_breaker.is_available(node_name):
+        print(f"Circuit Breaker: Bỏ qua full sync cho Node [{node_name}] do đang OFFLINE.")
+        return False
+        
     category_repo = CategoryRepository()
     
     with SessionLocal() as main_db:
@@ -57,9 +61,11 @@ def full_sync_node(node_name: str) -> bool:
                 for log in stuck_logs:
                     log.status = "SUCCESS" # Đã sync tay nên không cần chạy nữa
                 main_db.commit()
+                circuit_breaker.mark_success(node_name)
                 return True
                 
         except Exception as e:
+            circuit_breaker.mark_failure(node_name)
             print(f"Error during full sync for {node_name}: {e}")
             return False
 

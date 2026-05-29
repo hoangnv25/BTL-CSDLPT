@@ -36,12 +36,50 @@ DB_URLS = {
     "south": build_node_url("SOUTH_DB"),
 }
 
+import time
+from threading import Lock
+
+class NodeCircuitBreaker:
+    def __init__(self):
+        self._states = {} # {node: {"status": "ONLINE", "last_failure": 0}}
+        self._lock = Lock()
+        self.COOLDOWN = 10 # 10 seconds cooldown before retrying a down node
+
+    def is_available(self, node: str) -> bool:
+        with self._lock:
+            state = self._states.setdefault(node, {"status": "ONLINE", "last_failure": 0})
+            if state["status"] == "OFFLINE":
+                if time.time() - state["last_failure"] > self.COOLDOWN:
+                    state["status"] = "ONLINE"
+                    return True
+                return False
+            return True
+
+    def mark_failure(self, node: str):
+        with self._lock:
+            state = self._states.setdefault(node, {"status": "ONLINE", "last_failure": 0})
+            state["status"] = "OFFLINE"
+            state["last_failure"] = time.time()
+
+    def mark_success(self, node: str):
+        with self._lock:
+            state = self._states.setdefault(node, {"status": "ONLINE", "last_failure": 0})
+            state["status"] = "ONLINE"
+
+# Global Circuit Breaker instance
+circuit_breaker = NodeCircuitBreaker()
+
 engines = {}
 SessionLocals = {}
 
 for site, url in DB_URLS.items():
     if url:
-        engines[site] = create_engine(url, pool_pre_ping=True)
+        # Cấu hình timeout kết nối ngắn (0.5 giây) để tránh treo Backend khi một Node phụ bị sập
+        engines[site] = create_engine(
+            url, 
+            pool_pre_ping=True,
+            connect_args={"connect_timeout": 0.5}
+        )
         SessionLocals[site] = sessionmaker(autocommit=False, autoflush=False, bind=engines[site])
 
 # Default sẽ lấy db trung tâm

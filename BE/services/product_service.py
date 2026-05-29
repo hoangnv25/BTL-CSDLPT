@@ -1,12 +1,15 @@
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 import json
+import logging
+from datetime import datetime
 
 from BE.repositories.category_repository import CategoryRepository
 from BE.repositories.product_repository import ProductRepository
 from BE.repositories.inventory_repository import InventoryRepository
 from BE.models.replication_log import ReplicationLog
 from BE.workers.replication_worker import replication_worker
+from BE.database import get_db_node
 from BE.schemas.product import (
     ProductCreate,
     ProductOut,
@@ -16,6 +19,15 @@ from BE.schemas.product import (
     ProductDetailOut,
     ProductInventoryOut,
 )
+
+logger = logging.getLogger("app")
+
+def service_log(service_name: str, content: str):
+    time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_line = f"[{time_str}] [{service_name}] {content}"
+    print(log_line, flush=True)
+    logger.info(log_line)
+
 
 class ProductService:
     def __init__(self, session: Session) -> None:
@@ -41,6 +53,8 @@ class ProductService:
         return log_ids
 
     def create_product(self, body: ProductCreate) -> ProductOut:
+        service_log("ProductService", f"Bắt đầu xử lý tạo sản phẩm mới '{body.name}'")
+        
         category = self._category_repo.find_by_id(self._session, body.category_id)
         if not category:
             raise HTTPException(
@@ -54,19 +68,46 @@ class ProductService:
             category_id=body.category_id,
             price=body.price,
         )
+        self._session.flush() # ensure id is generated
         
         from BE.repositories.warehouse_repository import WarehouseRepository
         warehouses = WarehouseRepository().list_all(self._session)
-        for wh in warehouses:
-            self._inventory_repo.create(
-                self._session,
-                product_id=row.id,
-                warehouse_id=wh.id,
-                stock_quantity=0
-            )
-            
-        self._session.flush() # ensure id is generated
+        service_log("ProductService", f"Tìm thấy {len(warehouses)} kho hàng để tạo tồn kho.")
         
+        for wh in warehouses:
+            node_key = wh.region.value.lower()
+            service_log("ProductService", f"Kho '{wh.name}' thuộc vùng {wh.region} -> Định tuyến sang Node: [{node_key}]")
+            
+            node_session = get_db_node(node_key)
+            try:
+                # 1. Đồng bộ trực tiếp thông tin sản phẩm sang Node phụ để tránh lỗi FK
+                service_log("ProductService", f"Đang chèn đồng bộ thông tin sản phẩm ID={row.id} sang Node: [{node_key}]")
+                exists = self._product_repo.find_by_id(node_session, row.id)
+                if not exists:
+                    self._product_repo.create_with_id(
+                        node_session,
+                        id=row.id,
+                        name=row.name,
+                        category_id=row.category_id,
+                        price=row.price
+                    )
+                
+                # 2. Chèn dòng tồn kho mặc định
+                service_log("ProductService", f"Chèn dòng tồn kho mặc định (quantity=0) cho sản phẩm ID={row.id} tại Node: [{node_key}]")
+                self._inventory_repo.create(
+                    node_session,
+                    product_id=row.id,
+                    warehouse_id=wh.id,
+                    stock_quantity=0
+                )
+                node_session.commit()
+            except Exception as e:
+                node_session.rollback()
+                service_log("ProductService", f"LỖI chèn sản phẩm/tồn kho sang Node phụ [{node_key}]: {e}")
+                raise e
+            finally:
+                node_session.close()
+            
         log_ids = self._add_replication_logs(
             action="INSERT", 
             record_id=row.id, 
@@ -79,10 +120,10 @@ class ProductService:
         
         self._session.commit()
         replication_worker.trigger()
-        # self._session.refresh(row)
         
         out = ProductOut.model_validate(row)
         out.category_name = category.name
+        service_log("ProductService", f"Hoàn tất tạo sản phẩm '{row.name}' (ID={row.id}) và đồng bộ phân mảnh.")
         return out
 
     def list_products(self, include_deleted: bool = False) -> list[ProductWithTotalStockOut]:
@@ -92,9 +133,13 @@ class ProductService:
         rows = self._product_repo.list_all(self._session, include_deleted=include_deleted)
         categories = {c.id: c.name for c in self._category_repo.list_all(self._session)}
         
+        # Gom lô danh sách ID sản phẩm để tính tồn kho phân tán song song một lần duy nhất
+        product_ids = [row.id for row in rows]
+        stock_map = inv_service.get_total_stock_for_products(product_ids)
+        
         result = []
         for row in rows:
-            total_stock = inv_service.get_total_stock_by_product(row.id)
+            total_stock = stock_map.get(row.id, 0)
             result.append(
                 ProductWithTotalStockOut(
                     id=row.id,
@@ -117,10 +162,16 @@ class ProductService:
             )
         rows = self._product_repo.list_by_category(self._session, category_id, include_deleted=include_deleted)
         
+        from BE.services.inventory_service import InventoryService
+        inv_service = InventoryService(self._session)
+        
+        # Gom lô danh sách ID sản phẩm theo danh mục để tính tồn kho phân tán song song
+        product_ids = [row.id for row in rows]
+        stock_map = inv_service.get_total_stock_for_products(product_ids)
+        
         result = []
         for row in rows:
-            invs = self._inventory_repo.list_by_product(self._session, row.id)
-            total_stock = sum(i.stock_quantity for i in invs)
+            total_stock = stock_map.get(row.id, 0)
             result.append(
                 ProductWithTotalStockOut(
                     id=row.id,
@@ -144,7 +195,11 @@ class ProductService:
             )
         
         categories = {c.id: c.name for c in self._category_repo.list_all(self._session)}
-        invs = self._inventory_repo.list_by_warehouse(self._session, warehouse_id)
+        
+        from BE.services.inventory_service import InventoryService
+        inv_service = InventoryService(self._session)
+        invs = inv_service.list_by_warehouse(warehouse_id)
+        
         result = []
         for inv in invs:
             prod = self._product_repo.find_by_id(self._session, inv.product_id)
@@ -173,11 +228,12 @@ class ProductService:
         category = self._category_repo.find_by_id(self._session, row.category_id)
         category_name = category.name if category else None
         
-        invs = self._inventory_repo.list_by_product(self._session, id)
+        from BE.services.inventory_service import InventoryService
+        invs = InventoryService(self._session).list_by_product(id)
         total_stock = sum(i.stock_quantity for i in invs)
 
         from BE.repositories.warehouse_repository import WarehouseRepository
-        warehouses = {w.id: w.name for w in WarehouseRepository.list_all(self._session)}
+        warehouses = {w.id: w.name for w in WarehouseRepository().list_all(self._session)}
 
         inventory_list = []
         for inv in invs:

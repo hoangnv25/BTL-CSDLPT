@@ -3,7 +3,7 @@ from sqlalchemy import select
 from datetime import datetime, timezone
 import json
 
-from BE.database import SessionLocal, get_db_node
+from BE.database import SessionLocal, get_db_node, circuit_breaker
 from BE.models.replication_log import ReplicationLog
 from BE.repositories.category_repository import CategoryRepository
 from BE.repositories.product_repository import ProductRepository
@@ -58,7 +58,7 @@ class ReplicationWorker:
                     action = log.action
                     table_name = log.table_name
                     retry_count = log.retry_count
-                    # Notify FE một cách an toàn từ luồng phụ về luồng chính (Main Event Loop)
+                    # Notify FE một cách an sau từ luồng phụ về luồng chính (Main Event Loop)
                     asyncio.run_coroutine_threadsafe(self._notify_fe(node, action, table_name, retry_count), loop)
                 
             db.commit()
@@ -91,6 +91,10 @@ class ReplicationWorker:
         return results
 
     def _sync_log(self, log: ReplicationLog) -> bool:
+        if not circuit_breaker.is_available(log.target_node):
+            print(f"Circuit Breaker: Bỏ qua sync log {log.id} cho Node [{log.target_node}] do đang OFFLINE.")
+            return False
+            
         try:
             node_session = get_db_node(log.target_node)
             with node_session as session:
@@ -157,8 +161,10 @@ class ReplicationWorker:
                             self._product_repo.restore(session, existing)
                             
                 session.commit()
+                circuit_breaker.mark_success(log.target_node)
                 return True
         except Exception as e:
+            circuit_breaker.mark_failure(log.target_node)
             print(f"Sync failed for node {log.target_node}, log {log.id}: {e}")
             return False
 
