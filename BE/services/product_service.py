@@ -103,8 +103,7 @@ class ProductService:
                 node_session.commit()
             except Exception as e:
                 node_session.rollback()
-                service_log("ProductService", f"LỖI chèn sản phẩm/tồn kho sang Node phụ [{node_key}]: {e}")
-                raise e
+                service_log("ProductService", f"CANH BAO: Khong the chen truc tiep san pham/ton kho sang Node phu [{node_key}] do loi: {e}. Du lieu se duoc dong bo lai tu dong.")
             finally:
                 node_session.close()
             

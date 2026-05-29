@@ -130,6 +130,7 @@ class ReplicationWorker:
                                 category_id=data["category_id"],
                                 price=data["price"]
                             )
+                        self._ensure_inventory_for_product(session, log.record_id, log.target_node)
                     
                     elif log.action == "UPDATE":
                         data = json.loads(log.data_payload)
@@ -149,6 +150,7 @@ class ReplicationWorker:
                                 category_id=data["category_id"],
                                 price=data["price"]
                             )
+                            self._ensure_inventory_for_product(session, log.record_id, log.target_node)
 
                     elif log.action == "DELETE":
                         existing = self._product_repo.find_by_id(session, log.record_id)
@@ -167,6 +169,27 @@ class ReplicationWorker:
             circuit_breaker.mark_failure(log.target_node)
             print(f"Sync failed for node {log.target_node}, log {log.id}: {e}")
             return False
+
+    def _ensure_inventory_for_product(self, session, product_id: int, target_node: str):
+        with SessionLocal() as main_db:
+            from BE.repositories.warehouse_repository import WarehouseRepository
+            from BE.models.inventory import Inventory
+            from BE.repositories.inventory_repository import InventoryRepository
+            
+            warehouses = WarehouseRepository().list_all(main_db)
+            for wh in warehouses:
+                if wh.region.value.lower() == target_node.lower():
+                    inv_exists = session.query(Inventory).filter(
+                        Inventory.product_id == product_id,
+                        Inventory.warehouse_id == wh.id
+                    ).first()
+                    if not inv_exists:
+                        InventoryRepository().create(
+                            session,
+                            product_id=product_id,
+                            warehouse_id=wh.id,
+                            stock_quantity=0
+                        )
 
     async def _notify_fe(self, node: str, action: str, table_name: str, retry_count: int):
         message = {
