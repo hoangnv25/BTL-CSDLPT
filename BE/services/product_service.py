@@ -70,43 +70,6 @@ class ProductService:
         )
         self._session.flush() # ensure id is generated
         
-        from BE.repositories.warehouse_repository import WarehouseRepository
-        warehouses = WarehouseRepository().list_all(self._session)
-        service_log("ProductService", f"Tìm thấy {len(warehouses)} kho hàng để tạo tồn kho.")
-        
-        for wh in warehouses:
-            node_key = wh.region.value.lower()
-            service_log("ProductService", f"Kho '{wh.name}' thuộc vùng {wh.region} -> Định tuyến sang Node: [{node_key}]")
-            
-            node_session = get_db_node(node_key)
-            try:
-                # 1. Đồng bộ trực tiếp thông tin sản phẩm sang Node phụ để tránh lỗi FK
-                service_log("ProductService", f"Đang chèn đồng bộ thông tin sản phẩm ID={row.id} sang Node: [{node_key}]")
-                exists = self._product_repo.find_by_id(node_session, row.id)
-                if not exists:
-                    self._product_repo.create_with_id(
-                        node_session,
-                        id=row.id,
-                        name=row.name,
-                        category_id=row.category_id,
-                        price=row.price
-                    )
-                
-                # 2. Chèn dòng tồn kho mặc định
-                service_log("ProductService", f"Chèn dòng tồn kho mặc định (quantity=0) cho sản phẩm ID={row.id} tại Node: [{node_key}]")
-                self._inventory_repo.create(
-                    node_session,
-                    product_id=row.id,
-                    warehouse_id=wh.id,
-                    stock_quantity=0
-                )
-                node_session.commit()
-            except Exception as e:
-                node_session.rollback()
-                service_log("ProductService", f"CANH BAO: Khong the chen truc tiep san pham/ton kho sang Node phu [{node_key}] do loi: {e}. Du lieu se duoc dong bo lai tu dong.")
-            finally:
-                node_session.close()
-            
         log_ids = self._add_replication_logs(
             action="INSERT", 
             record_id=row.id, 
@@ -122,7 +85,7 @@ class ProductService:
         
         out = ProductOut.model_validate(row)
         out.category_name = category.name
-        service_log("ProductService", f"Hoàn tất tạo sản phẩm '{row.name}' (ID={row.id}) và đồng bộ phân mảnh.")
+        service_log("ProductService", f"Hoàn tất tạo sản phẩm '{row.name}' (ID={row.id}) và ghi log đồng bộ.")
         return out
 
     def list_products(self, include_deleted: bool = False) -> list[ProductWithTotalStockOut]:
