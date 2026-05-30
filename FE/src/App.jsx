@@ -14,12 +14,45 @@ import InventoryWareHourse from './pages/InventoryWareHourse/InventoryWareHourse
 import NotificationBell from './components/NotificationBell/NotificationBell';
 import { roleAllowedPages } from './components/Sidebar/roles';
 
+// Monkey patch fetch để tự động đính kèm Header định tuyến X-Target-Node
+const originalFetch = window.fetch;
+window.fetch = async function (...args) {
+  let [resource, config] = args;
+  // Chỉ thêm header nếu là gọi API tới Backend
+  if (typeof resource === 'string' && (resource.includes('localhost') || resource.includes('127.0.0.1'))) {
+    config = config || {};
+    config.headers = {
+      ...config.headers,
+      'X-Target-Node': window.targetNode || 'main'
+    };
+    args[1] = config;
+  }
+  return originalFetch.apply(this, args);
+};
+
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [activeTab, setActiveTab] = useState('order'); // Mặc định vào order để test
+  const [warehouseRegionMap, setWarehouseRegionMap] = useState({});
   
   // State quản lý việc giả lập vai trò & kho
   const [currentOption, setCurrentOption] = useState('admin');
+
+  // Khởi tạo bản đồ ánh xạ khu vực kho hàng để phục vụ Load Balancing
+  useEffect(() => {
+    originalFetch('http://localhost:8000/warehouse')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          const mapping = {};
+          data.forEach(wh => {
+            mapping[wh.id] = wh.region.toLowerCase();
+          });
+          setWarehouseRegionMap(mapping);
+        }
+      })
+      .catch(err => console.error("Không thể tải danh sách kho để phân luồng đọc:", err));
+  }, []);
 
   // Phân tích role và warehouseId từ currentOption
   let role = 'admin';
@@ -27,9 +60,14 @@ function App() {
   
   if (currentOption === 'user') {
     role = 'user';
+    window.targetNode = 'auto'; // Load balancing ngẫu nhiên ở backend
   } else if (currentOption.startsWith('manager_')) {
     role = 'manager';
     warehouseId = parseInt(currentOption.split('_')[1], 10);
+    // Tự động dò ra region của kho này từ bản đồ vừa tải
+    window.targetNode = warehouseRegionMap[warehouseId] || 'main';
+  } else {
+    window.targetNode = 'main'; // Admin đọc từ main
   }
 
   // Khi thay đổi Vai trò/Kho, nếu activeTab không thuộc quyền truy cập của vai trò mới,
@@ -109,8 +147,8 @@ function App() {
       <main style={{ flex: 1, overflowY: 'auto', padding: '2rem', position: 'relative' }}>
         {renderContent()}
 
-        {/* Component Chuông và Drawer thông báo đồng bộ */}
-        <NotificationBell />
+        {/* Component Chuông và Drawer thông báo đồng bộ (Chỉ hiển thị với Admin tổng) */}
+        {currentOption === 'admin' && <NotificationBell />}
       </main>
     </div>
   );

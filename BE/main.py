@@ -40,6 +40,8 @@ app.include_router(replication_router)
 
 @app.on_event("startup")
 async def on_startup() -> None:
+    import asyncio
+    app.state.loop = asyncio.get_running_loop()
     from BE.utils.migration import migrate_main_inventories_to_shards
     print("Khởi tạo cấu trúc bảng cho toàn bộ CSDL Phân tán...")
     

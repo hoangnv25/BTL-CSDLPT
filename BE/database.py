@@ -106,3 +106,64 @@ def get_db_node(node_name: str) -> Session:
     if node_name not in SessionLocals:
         raise ValueError(f"Database node '{node_name}' is not configured.")
     return SessionLocals[node_name]()
+
+from fastapi import Request
+from sqlalchemy import text
+import random
+import asyncio
+
+def get_read_db(request: Request) -> Generator[Session, None, None]:
+    """Smart Read Routing Strategy cho Khách hàng và Admin Kho"""
+    target_node = request.headers.get("X-Target-Node", "main").lower()
+    
+    if target_node == "main":
+        db = SessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
+        return
+        
+    nodes_to_try = []
+    
+    if target_node == "auto":
+        nodes_to_try = ["north", "central", "south"]
+        random.shuffle(nodes_to_try)
+    elif target_node in ["north", "central", "south"]:
+        nodes_to_try = [target_node]
+        
+    for node in nodes_to_try:
+        if circuit_breaker.is_available(node):
+            db = SessionLocals.get(node)
+            if db:
+                session = db()
+                try:
+                    # Ping thử DB
+                    session.execute(text("SELECT 1"))
+                    circuit_breaker.mark_success(node)
+                    yield session
+                    return
+                except Exception:
+                    circuit_breaker.mark_failure(node)
+                    print(f"[Read Routing] Phát hiện Node {node} SẬP! Đang thử node khác...")
+                    session.close()
+                    
+                    # Bắn thông báo WebSocket cảnh báo cho Admin
+                    try:
+                        from BE.routers.websocket import manager
+                        loop = request.app.state.loop
+                        msg = {
+                            "type": "SYNC_ERROR",
+                            "message": f"Phát hiện Node {node.upper()} sập khi truy xuất dữ liệu! Hệ thống đã tự động bẻ lái sang nhánh khác."
+                        }
+                        asyncio.run_coroutine_threadsafe(manager.broadcast(msg), loop)
+                    except Exception as e:
+                        print("Không thể gửi WS cảnh báo:", e)
+                    
+    # Nếu tất cả các node đều sập hoặc không khả dụng -> Fallback an toàn về Main
+    print(f"[Read Routing] Cảnh báo: TẤT CẢ các Node chi nhánh đã sập! Bẻ lái truy cập về MAIN DB.")
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()

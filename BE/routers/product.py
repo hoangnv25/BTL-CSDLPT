@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from BE.database import get_db
+from BE.database import get_db, get_read_db
 from BE.schemas.product import (
     ProductCreate,
     ProductOut,
@@ -21,7 +21,7 @@ router = APIRouter(tags=["product"])
 )
 def list_products(
     include_deleted: bool = Query(False, description="Bao gồm cả sản phẩm đã xóa mềm"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_read_db)
 ) -> list[ProductWithTotalStockOut]:
     return ProductService(db).list_products(include_deleted=include_deleted)
 
@@ -33,7 +33,7 @@ def list_products(
 def list_products_by_category(
     category_id: int = Query(...),
     include_deleted: bool = Query(False, description="Bao gồm cả sản phẩm đã xóa mềm"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_read_db),
 ) -> list[ProductWithTotalStockOut]:
     return ProductService(db).list_products_by_category(category_id, include_deleted=include_deleted)
 
@@ -45,7 +45,7 @@ def list_products_by_category(
 def list_products_by_warehouse(
     warehouse_id: int = Query(...),
     include_deleted: bool = Query(False, description="Bao gồm cả sản phẩm đã xóa mềm"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_read_db),
 ) -> list[ProductWithWarehouseStockOut]:
     return ProductService(db).list_products_by_warehouse(warehouse_id, include_deleted=include_deleted)
 
@@ -63,7 +63,7 @@ def create_product(body: ProductCreate, db: Session = Depends(get_db)) -> Produc
     response_model=ProductDetailOut,
     summary="Lấy chi tiết một sản phẩm, có cả tồn kho từng kho",
 )
-def get_product(id: int, db: Session = Depends(get_db)) -> ProductDetailOut:
+def get_product(id: int, db: Session = Depends(get_read_db)) -> ProductDetailOut:
     return ProductService(db).get_product(id)
 
 @router.put(

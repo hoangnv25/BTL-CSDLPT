@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from BE.database import get_db
+from BE.database import get_db, get_read_db
 from BE.schemas.category import CategoryCreate, CategoryOut, CategoryUpdate
 from BE.services.category_service import CategoryService
 
@@ -12,7 +12,7 @@ router = APIRouter(tags=["category"])
     response_model=list[CategoryOut],
     summary="Liệt kê toàn bộ danh mục sản phẩm",
 )
-def list_categories(db: Session = Depends(get_db)) -> list[CategoryOut]:
+def list_categories(db: Session = Depends(get_read_db)) -> list[CategoryOut]:
     return CategoryService(db).list_categories()
 
 @router.post(
