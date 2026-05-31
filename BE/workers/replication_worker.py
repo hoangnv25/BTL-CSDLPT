@@ -53,12 +53,12 @@ class ReplicationWorker:
                 else:
                     log.retry_count += 1
                     log.status = "FAILED"
-                    # Cứu dữ liệu ra các biến trước khi session bị đóng để tránh lỗi DetachedInstanceError
+                    # Lưu trữ dữ liệu ra các biến trước khi session bị đóng để tránh lỗi DetachedInstanceError
                     node = log.target_node
                     action = log.action
                     table_name = log.table_name
                     retry_count = log.retry_count
-                    # Notify FE một cách an sau từ luồng phụ về luồng chính (Main Event Loop)
+                    # Gửi thông báo đến FE từ luồng phụ (Worker) về luồng chính (Main Event Loop)
                     asyncio.run_coroutine_threadsafe(self._notify_fe(node, action, table_name, retry_count), loop)
                 
             db.commit()

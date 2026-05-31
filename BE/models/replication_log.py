@@ -10,10 +10,10 @@ class ReplicationLog(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     table_name: Mapped[str] = mapped_column(String(50), nullable=False)
     record_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    action: Mapped[str] = mapped_column(String(20), nullable=False)  # INSERT, UPDATE, DELETE
-    data_payload: Mapped[str | None] = mapped_column(Text, nullable=True) # JSON payload
-    target_node: Mapped[str] = mapped_column(String(50), nullable=False) # north, central, south
-    status: Mapped[str] = mapped_column(String(20), default="PENDING") # PENDING, SUCCESS, FAILED
+    action: Mapped[str] = mapped_column(String(20), nullable=False)  # Các hành động: INSERT, UPDATE, DELETE
+    data_payload: Mapped[str | None] = mapped_column(Text, nullable=True) # Nội dung dữ liệu định dạng JSON
+    target_node: Mapped[str] = mapped_column(String(50), nullable=False) # Node đích: north, central, south
+    status: Mapped[str] = mapped_column(String(20), default="PENDING") # Trạng thái: PENDING, SUCCESS, FAILED
     retry_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at = mapped_column(DateTime(timezone=True), server_default=func.now())
     next_retry_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

@@ -356,11 +356,11 @@
 }
 
 /* Pagination Styles */
-.pagination {
+.paginationContainer {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.5rem;
+  gap: 1rem;
   padding: 1rem;
   border-top: 1px solid var(--border-color);
   background: var(--bg-main);
@@ -370,6 +370,29 @@
   font-size: 13px;
   color: var(--text-secondary);
   margin-right: auto;
+}
+
+/* Custom styles for Ant Design Pagination to match theme */
+:global(.ant-pagination-item-active) {
+  border-color: var(--primary-color) !important;
+}
+
+:global(.ant-pagination-item-active a) {
+  color: var(--primary-color) !important;
+}
+
+:global(.ant-pagination-item:hover) {
+  border-color: var(--primary-color) !important;
+}
+
+:global(.ant-pagination-item:hover a) {
+  color: var(--primary-color) !important;
+}
+
+:global(.ant-pagination-prev:hover .ant-pagination-item-link),
+:global(.ant-pagination-next:hover .ant-pagination-item-link) {
+  color: var(--primary-color) !important;
+  border-color: var(--primary-color) !important;
 }
 
 .pageBtn {

@@ -1,4 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { ConfigProvider } from 'antd';
+import viVN from 'antd/locale/vi_VN';
+import dayjs from 'dayjs';
+import 'dayjs/locale/vi';
+
+dayjs.locale('vi');
+
 import Login from './pages/Login/Login';
 import Sidebar from './components/Sidebar/Sidebar';
 import Category from './pages/Category/Category';
@@ -11,6 +18,7 @@ import PackageWareHourse from './pages/PackageWareHourse/PackageWareHourse';
 import MyOrder from './pages/MyOrder/MyOrder';
 import ProductView from './pages/ProductView/ProductView';
 import InventoryWareHourse from './pages/InventoryWareHourse/InventoryWareHourse';
+import Stats from './pages/Stats/Stats';
 import NotificationBell from './components/NotificationBell/NotificationBell';
 import { roleAllowedPages } from './components/Sidebar/roles';
 
@@ -70,6 +78,10 @@ function App() {
 
   const renderContent = () => {
     switch (activeTab) {
+      case 'order':
+        return <Order />;
+      case 'stats':
+        return <Stats warehouse_id={role === 'manager' ? warehouseId : null} />;
       case 'category':
         return <Category />;
       case 'product':
@@ -78,8 +90,6 @@ function App() {
         return <Warehouse />;
       case 'inventory':
         return <Inventory />;
-      case 'order':
-        return <Order />;
       case 'package':
         return <Package />;
       case 'package_warehouse':
@@ -96,23 +106,25 @@ function App() {
   };
 
   return (
-    <div style={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', background: 'var(--bg-main)' }}>
-      <Sidebar 
-        activeTab={activeTab} 
-        setActiveTab={setActiveTab} 
-        currentUser={currentUser} 
-        onLogout={handleLogout} 
-        currentOption={currentOption}
-        onOptionChange={setCurrentOption}
-      />
-      
-      <main style={{ flex: 1, overflowY: 'auto', padding: '2rem', position: 'relative' }}>
-        {renderContent()}
+    <ConfigProvider locale={viVN}>
+      <div style={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', background: 'var(--bg-main)' }}>
+        <Sidebar 
+          activeTab={activeTab} 
+          setActiveTab={setActiveTab} 
+          currentUser={currentUser} 
+          onLogout={handleLogout} 
+          currentOption={currentOption}
+          onOptionChange={setCurrentOption}
+        />
+        
+        <main style={{ flex: 1, overflowY: 'auto', padding: '2rem', position: 'relative' }}>
+          {renderContent()}
 
-        {/* Component Chuông và Drawer thông báo đồng bộ */}
-        <NotificationBell />
-      </main>
-    </div>
+          {/* Component Chuông và Drawer thông báo đồng bộ */}
+          <NotificationBell />
+        </main>
+      </div>
+    </ConfigProvider>
   );
 }
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Package, ListDashes, SignOut, Warehouse as WarehouseIcon, Stack, Truck, Receipt, Eye, Database } from '@phosphor-icons/react';
+import { Package, ListDashes, SignOut, Warehouse as WarehouseIcon, Stack, Truck, Receipt, Eye, Database, ChartBar } from '@phosphor-icons/react';
 import styles from './Sidebar.module.css';
 import RoleDropdown from './RoleDropdown';
 import { roleAllowedPages } from './roles';
@@ -23,6 +23,7 @@ export default function Sidebar({
 
   const allMenuItems = [
     { id: 'order', label: 'Quản Lý Đơn Hàng', icon: Package },
+    { id: 'stats', label: 'Thống Kê', icon: ChartBar },
     { id: 'category', label: 'Danh Mục Sản Phẩm', icon: ListDashes },
     { id: 'product', label: 'Sản Phẩm', icon: Package },
     { id: 'warehouse', label: 'Kho Hàng', icon: WarehouseIcon },

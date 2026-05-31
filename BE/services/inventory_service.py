@@ -53,8 +53,8 @@ class InventoryService:
 
         combined_rows = []
         futures = {inventory_thread_pool.submit(query_node, node): node for node in self._nodes}
-        # Giới hạn thời gian chờ các Thread tối đa 0.5s để tránh nghẽn DNS của hệ điều hành
-        done, not_done = wait(futures.keys(), timeout=0.5)
+        # Tăng timeout lên 2.0s để tránh nghẽn DNS của hệ điều hành hoặc khi DB chịu tải cao
+        done, not_done = wait(futures.keys(), timeout=2.0)
         
         for f in done:
             node = futures[f]
@@ -66,7 +66,7 @@ class InventoryService:
         for f in not_done:
             node = futures[f]
             circuit_breaker.mark_failure(node)
-            service_log("InventoryService", f"TIMEOUT: Node phụ [{node}] không phản hồi trong 0.5s (kẹt DNS/Kết nối). Đánh dấu OFFLINE.")
+            service_log("InventoryService", f"TIMEOUT: Node phụ [{node}] không phản hồi trong 2.0s (kẹt DNS/Kết nối). Đánh dấu OFFLINE.")
                     
         return combined_rows
 
