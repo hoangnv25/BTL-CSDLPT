@@ -2,7 +2,7 @@
 .cursor
 .docs
 .venv
-docs/*
+.report
 
 __pycache__
 *.pyc

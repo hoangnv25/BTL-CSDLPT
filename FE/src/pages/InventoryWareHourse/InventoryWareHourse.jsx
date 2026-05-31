@@ -99,8 +99,15 @@ export default function InventoryWareHourse({ warehouse_id = 1 }) {
 
 
 
-  // Lọc chỉ giữ lại tồn kho của các sản phẩm còn đang hoạt động
-  const activeInventories = inventories.filter(inv => productMap[inv.product_id]);
+  // Lọc chỉ giữ lại tồn kho của các sản phẩm còn đang hoạt động và sắp xếp theo warehouse_id, sau đó tới id
+  const activeInventories = inventories
+    .filter(inv => productMap[inv.product_id])
+    .sort((a, b) => {
+      if (a.warehouse_id !== b.warehouse_id) {
+        return a.warehouse_id - b.warehouse_id;
+      }
+      return a.id - b.id;
+    });
 
   // Pagination Logic
   const totalPages = Math.ceil(activeInventories.length / ITEMS_PER_PAGE) || 1;
@@ -175,8 +182,8 @@ export default function InventoryWareHourse({ warehouse_id = 1 }) {
                 </tr>
               ) : (
                 currentData.map((inv) => (
-                  <tr key={inv.id} className={styles.tableRow}>
-                    <td className={styles.td}>{inv.id}</td>
+                  <tr key={`${inv.warehouse_id}-${inv.id}`} className={styles.tableRow}>
+                    <td className={styles.td}>{`${inv.warehouse_id}_${inv.id}`}</td>
                     <td className={styles.td}>
                       <strong>{productMap[inv.product_id] || `Sản phẩm #${inv.product_id}`}</strong>
                     </td>

@@ -3,6 +3,7 @@ from pydantic import BaseModel
 
 class InventoryUpdate(BaseModel):
     id: int
+    warehouse_id: int
     stock_quantity: int
 
 
