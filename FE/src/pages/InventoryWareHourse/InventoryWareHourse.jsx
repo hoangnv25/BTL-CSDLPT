@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PencilSimple, MapPin } from '@phosphor-icons/react';
+import { Pagination } from 'antd';
 import styles from './InventoryWareHourse.module.css';
 import InventoryModal from '../Inventory/InventoryModal'; // Reuse existing update modal
 import { formatToVietnamTime } from '../../utils/dateTime';
@@ -119,25 +120,17 @@ export default function InventoryWareHourse({ warehouse_id = 1 }) {
 
   const renderPagination = () => {
     return (
-      <div className={styles.pagination}>
+      <div className={styles.paginationContainer}>
         <span className={styles.pageInfo}>
           Hiển thị {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, activeInventories.length)} trong tổng số {activeInventories.length} bản ghi
         </span>
-        <button className={styles.pageBtn} onClick={handlePrevPage} disabled={currentPage === 1}>
-          Trước
-        </button>
-        {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-          <button
-            key={page}
-            className={`${styles.pageBtn} ${currentPage === page ? styles.pageBtnActive : ''}`}
-            onClick={() => setCurrentPage(page)}
-          >
-            {page}
-          </button>
-        ))}
-        <button className={styles.pageBtn} onClick={handleNextPage} disabled={currentPage === totalPages}>
-          Sau
-        </button>
+        <Pagination
+          current={currentPage}
+          total={activeInventories.length}
+          pageSize={ITEMS_PER_PAGE}
+          onChange={(page) => setCurrentPage(page)}
+          showSizeChanger={false}
+        />
       </div>
     );
   };
