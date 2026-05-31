@@ -29,7 +29,7 @@ async def lifespan(app: FastAPI):
         try:
             main_tables = [
                 table for name, table in Base.metadata.tables.items()
-                if name not in ["inventories", "packages", "package_details", "package_sales_stats"]
+                if name not in ["inventories", "packages", "package_details", "package_sales_stats", "warehouses"]
             ]
             Base.metadata.create_all(bind=engines["main"], tables=main_tables)
             print("Đã khởi tạo toàn bộ cấu trúc bảng cho Main DB (ngoại trừ dữ liệu phân sharding).")
@@ -39,8 +39,8 @@ async def lifespan(app: FastAPI):
             
     # 2. Tạo cấu trúc bảng cho các Node chi nhánh và xóa bảng không cần thiết
     # Lưu ý: categories và products được giữ lại ở Node để thực hiện join dữ liệu local (Read-replicated)
-    # warehouses, users, orders CHỈ nằm ở Trung tâm (Main DB)
-    DISTRIBUTED_TABLE_NAMES = ["categories", "products", "inventories", "packages", "package_details", "package_sales_stats"]
+    # warehouses được phân mảnh nguyên thủy (PHF) trên các Node phụ
+    DISTRIBUTED_TABLE_NAMES = ["warehouses", "categories", "products", "inventories", "packages", "package_details", "package_sales_stats"]
     
     node_tables = [
         table for name, table in Base.metadata.tables.items()
@@ -168,9 +168,20 @@ async def lifespan(app: FastAPI):
     # 3. Chạy di trú và kiểm tra đối chiếu tồn kho/kiện hàng từ main DB sang các Node phân sharding
     try:
         from BE.utils.migration import (
+            migrate_warehouses_to_shards,
+            setup_node_foreign_keys,
             verify_and_initialize_missing_inventories,
             migrate_main_packages_to_shards
         )
+        # 3a. Di trú kho hàng sang các phân mảnh phụ trước
+        migrate_warehouses_to_shards()
+        
+        # 3b. Thiết lập khóa ngoại vật lý tại các Node chi nhánh
+        for site_name, db_engine in engines.items():
+            if site_name != "main" and circuit_breaker.is_available(site_name):
+                setup_node_foreign_keys(site_name, db_engine)
+
+        # 3c. Tiếp tục di trú tồn kho và kiện hàng
         migrate_main_inventories_to_shards()
         verify_and_initialize_missing_inventories()
         migrate_main_packages_to_shards()

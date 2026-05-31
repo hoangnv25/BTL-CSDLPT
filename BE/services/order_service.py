@@ -90,8 +90,8 @@ class OrderService:
         service_log("OrderService", "Bắt đầu mở các kết nối/transaction đến các Node phụ...")
         
         # 1. Truy vấn các warehouses từ main DB để biết phân vùng miền (Region) của từng warehouse
-        from BE.models.warehouse import Warehouse
-        warehouses_list = self._session.query(Warehouse).all()
+        from BE.repositories.warehouse_repository import WarehouseRepository
+        warehouses_list = WarehouseRepository.list_all(self._session)
         warehouse_regions = {w.id: w.region.value.lower() for w in warehouses_list}
         
         from BE.database import get_db_node, circuit_breaker
@@ -421,14 +421,14 @@ class OrderService:
                 failed_nodes.append(node)
 
         # 3. Lấy thông tin phụ trợ (Warehouses, Products, Categories) từ Main DB
-        from BE.models.warehouse import Warehouse
+        from BE.repositories.warehouse_repository import WarehouseRepository
         from BE.models.category import Category
         from BE.schemas.warehouse import WarehouseOut
         from BE.schemas.product import ProductOut
 
         warehouse_ids = {p["warehouse_id"] for p in packages_data}
         warehouses = {w.id: WarehouseOut(id=w.id, name=w.name, region=w.region, address=w.address) 
-                      for w in self._session.query(Warehouse).filter(Warehouse.id.in_(warehouse_ids)).all()} if warehouse_ids else {}
+                      for w in WarehouseRepository.list_by_ids(self._session, list(warehouse_ids))} if warehouse_ids else {}
 
         product_ids = {item["product_id"] for p in packages_data for item in p["items"]}
         products = self._session.query(Product).filter(Product.id.in_(product_ids)).all() if product_ids else []

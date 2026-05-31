@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from BE.database import get_db_node, circuit_breaker
 from BE.models.stats import PackageSalesStat
 from BE.models.product import Product
-from BE.models.warehouse import Warehouse
+from BE.repositories.warehouse_repository import WarehouseRepository
 
 logger = logging.getLogger("app")
 
@@ -110,7 +110,7 @@ class StatsService:
         
         if warehouse_id:
             main_db = SessionLocal()
-            wh = main_db.query(Warehouse).filter(Warehouse.id == warehouse_id).first()
+            wh = WarehouseRepository.find_by_id(main_db, warehouse_id)
             if wh:
                 nodes_to_query = [wh.region.value.lower()]
             main_db.close()
@@ -223,7 +223,7 @@ class StatsService:
         try:
             nodes_to_query = ["north", "central", "south"]
             if warehouse_id:
-                wh = main_db.query(Warehouse).filter(Warehouse.id == warehouse_id).first()
+                wh = WarehouseRepository.find_by_id(main_db, warehouse_id)
                 if not wh:
                     return {"error": "Warehouse not found"}
                 nodes_to_query = [wh.region.value.lower()]

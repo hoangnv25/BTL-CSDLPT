@@ -129,8 +129,8 @@ class PackageService:
         # 1. Xác định các Node phụ cần truy vấn
         target_nodes = []
         if warehouse_id is not None:
-            from BE.models.warehouse import Warehouse
-            wh = session.query(Warehouse).filter(Warehouse.id == warehouse_id).first()
+            from BE.repositories.warehouse_repository import WarehouseRepository
+            wh = WarehouseRepository.find_by_id(session, warehouse_id)
             if not wh:
                 package_service_log(f"LỖI: Không tìm thấy kho hàng ID={warehouse_id}")
                 raise HTTPException(status_code=404, detail="Không tìm thấy kho hàng")
@@ -209,7 +209,7 @@ class PackageService:
         # 3. Lấy thông tin chi tiết từ Main DB
         from BE.models.order import Order
         from BE.models.user import User
-        from BE.models.warehouse import Warehouse
+        from BE.repositories.warehouse_repository import WarehouseRepository
         from BE.models.product import Product
         from BE.models.category import Category
         from BE.schemas.warehouse import WarehouseOut
@@ -237,7 +237,7 @@ class PackageService:
                 ordered_at=o.ordered_at
             )
 
-        warehouses = session.query(Warehouse).filter(Warehouse.id.in_(warehouse_ids)).all() if warehouse_ids else []
+        warehouses = WarehouseRepository.list_by_ids(session, warehouse_ids) if warehouse_ids else []
         warehouses_by_id = {w.id: WarehouseOut(id=w.id, name=w.name, region=w.region, address=w.address) for w in warehouses}
 
         products = session.query(Product).filter(Product.id.in_(product_ids)).all() if product_ids else []
