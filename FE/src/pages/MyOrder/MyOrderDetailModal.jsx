@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Package as PackageIcon } from '@phosphor-icons/react';
+import { X, Package as PackageIcon, Warning } from '@phosphor-icons/react';
 import styles from './MyOrder.module.css';
 import { formatToVietnamTime } from '../../utils/dateTime';
 
@@ -57,6 +57,12 @@ export default function MyOrderDetailModal({ isOpen, onClose, orderId }) {
             <div style={{ color: 'var(--danger-color)' }}>{error}</div>
           ) : order ? (
             <>
+              {order.is_partial && order.warning_message && (
+                <div className={styles.warningBanner}>
+                  <Warning size={20} weight="fill" />
+                  <span>{order.warning_message}</span>
+                </div>
+              )}
               {/* Thông tin chung */}
               <div className={styles.detailGrid}>
                 <div>

@@ -42,6 +42,8 @@ class OrderOut(BaseModel):
     total_amount: Decimal
     ordered_at: datetime
     packages: list[PackageOut]
+    is_partial: bool = False
+    warning_message: str | None = None
 
     model_config = {"from_attributes": True}
 

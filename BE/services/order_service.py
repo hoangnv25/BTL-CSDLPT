@@ -377,6 +377,8 @@ class OrderService:
         service_log("OrderService", f"Ánh xạ chỉ ra các Node chứa kiện hàng của đơn hàng: {target_nodes}")
 
         packages_data = []
+        failed_nodes = []
+        is_partial = False
         
         # Nếu chưa có ánh xạ nào (có thể là đơn hàng cũ trước khi sharding), thực hiện quét trên cả 3 Node
         if not target_nodes:
@@ -388,6 +390,8 @@ class OrderService:
         for node in target_nodes:
             if not circuit_breaker.is_available(node):
                 service_log("OrderService", f"Circuit Breaker: Bỏ qua Node [{node}] đang ngoại tuyến.")
+                is_partial = True
+                failed_nodes.append(node)
                 continue
             try:
                 node_session = get_db_node(node)
@@ -408,9 +412,13 @@ class OrderService:
                             "status": p.status,
                             "items": details_list
                         })
+                circuit_breaker.mark_success(node)
                 service_log("OrderService", f" -> Lấy thành công {len(node_pkgs)} kiện hàng từ Node phụ [{node}]")
             except Exception as e:
                 service_log("OrderService", f"CẢNH BÁO: Lỗi đọc kiện hàng trên Node [{node}]: {e}")
+                circuit_breaker.mark_failure(node)
+                is_partial = True
+                failed_nodes.append(node)
 
         # 3. Lấy thông tin phụ trợ (Warehouses, Products, Categories) từ Main DB
         from BE.models.warehouse import Warehouse
@@ -449,6 +457,12 @@ class OrderService:
                     )
                 )
 
+        warning_msg = None
+        if is_partial and failed_nodes:
+            region_map = {"north": "Miền Bắc", "central": "Miền Trung", "south": "Miền Nam"}
+            friendly_nodes = [region_map.get(n, n) for n in failed_nodes]
+            warning_msg = f"Hệ thống tạm thời không thể kết nối tới các Chi nhánh: {', '.join(friendly_nodes)}. Một số thông tin kiện hàng có thể không đầy đủ."
+
         return OrderOut(
             order_id=order.id,
             user=user_out,
@@ -456,6 +470,8 @@ class OrderService:
             total_amount=order.total_amount,
             ordered_at=order.ordered_at,
             packages=packages_out_list,
+            is_partial=is_partial,
+            warning_message=warning_msg
         )
 
 
