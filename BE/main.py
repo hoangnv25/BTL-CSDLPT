@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 import asyncio
+from contextlib import asynccontextmanager
 
 from BE.database import Base, SessionLocal, engine, engines, circuit_breaker
 import BE.models  # noqa: F401  # register ORM metadata
@@ -17,29 +18,8 @@ from BE.routers.replication import router as replication_router
 from BE.routers.replication import initial_full_sync
 from BE.workers.replication_worker import replication_worker
 
-app = FastAPI(title="FastAPI + MySQL + Docker")
-
-# Cấu hình CORS để cho phép Frontend (cổng 5173) gọi API
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Cho phép tất cả các nguồn hoặc bạn có thể thay thế bằng ["http://localhost:5173"]
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.include_router(user_router)
-app.include_router(category_router)
-app.include_router(product_router)
-app.include_router(warehouse_router)
-app.include_router(inventory_router)
-app.include_router(order_router)
-app.include_router(package_router, prefix="/package", tags=["Package"])
-app.include_router(websocket_router)
-app.include_router(replication_router)
-
-@app.on_event("startup")
-async def on_startup() -> None:
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     from BE.utils.migration import migrate_main_inventories_to_shards
     print("Khởi tạo cấu trúc bảng cho toàn bộ CSDL Phân tán...")
     
@@ -118,16 +98,42 @@ async def on_startup() -> None:
         verify_and_initialize_missing_inventories()
         migrate_main_packages_to_shards()
     except Exception as e:
-        print(f"Error: Lỗi khi di trú/bù đắp dữ liệu trong quá trình startup: {e}")
-    
-    # Run initial full sync in background thread
+        print(f"Di trú dữ liệu thất bại: {e}")
+
+    # 4. Run initial full sync in background thread
     print("Khởi chạy đồng bộ toàn phần trong background...")
     asyncio.create_task(asyncio.to_thread(initial_full_sync))
     
-    # Start replication worker in background
+    # 5. Start replication worker in background
     print("Khởi chạy worker đồng bộ...")
-    asyncio.create_task(replication_worker.run())
+    worker_task = asyncio.create_task(replication_worker.run())
+    
+    yield
+    
+    # Shutdown: Dừng worker
+    print("Đang tắt ứng dụng, dừng worker đồng bộ...")
+    worker_task.cancel()
 
+app = FastAPI(title="FastAPI + MySQL + Docker", lifespan=lifespan)
+
+# Cấu hình CORS để cho phép Frontend (cổng 5173) gọi API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Cho phép tất cả các nguồn hoặc bạn có thể thay thế bằng ["http://localhost:5173"]
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(user_router)
+app.include_router(category_router)
+app.include_router(product_router)
+app.include_router(warehouse_router)
+app.include_router(inventory_router)
+app.include_router(order_router)
+app.include_router(package_router, prefix="/package", tags=["Package"])
+app.include_router(websocket_router)
+app.include_router(replication_router)
 
 @app.get("/")
 def root():
