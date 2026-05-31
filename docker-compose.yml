@@ -61,7 +61,7 @@ services:
   mysql_node1:
     image: mysql:8.0
     container_name: csdlpt_db_node1
-    command: ["mysqld", "--port=3308"]
+    command: ["mysqld", "--port=3308", "--auto-increment-increment=3", "--auto-increment-offset=1"]
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: db
@@ -92,7 +92,7 @@ services:
   mysql_node2:
     image: mysql:8.0
     container_name: csdlpt_db_node2
-    command: ["mysqld", "--port=3309"]
+    command: ["mysqld", "--port=3309", "--auto-increment-increment=3", "--auto-increment-offset=2"]
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: db
@@ -123,7 +123,7 @@ services:
   mysql_node3:
     image: mysql:8.0
     container_name: csdlpt_db_node3
-    command: ["mysqld", "--port=3310"]
+    command: ["mysqld", "--port=3310", "--auto-increment-increment=3", "--auto-increment-offset=3"]
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: db
