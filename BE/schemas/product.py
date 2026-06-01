@@ -37,6 +37,8 @@ class ProductInventoryOut(BaseModel):
 
     model_config = {"from_attributes": True}
 
-class ProductDetailOut(ProductWithTotalStockOut):
+class ProductDetailOut(BaseModel):
+    id: int
+    total_stock: int
     inventory: list[ProductInventoryOut]
 

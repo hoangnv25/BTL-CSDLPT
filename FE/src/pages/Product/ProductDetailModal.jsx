@@ -3,7 +3,7 @@ import { X, MapPin } from '@phosphor-icons/react';
 import styles from './Product.module.css';
 import { formatToVietnamTime } from '../../utils/dateTime';
 
-export default function ProductDetailModal({ isOpen, onClose, productId }) {
+export default function ProductDetailModal({ isOpen, onClose, productId, product }) {
   const [productDetail, setProductDetail] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -23,7 +23,11 @@ export default function ProductDetailModal({ isOpen, onClose, productId }) {
       const response = await fetch(`${API_BASE_URL}/product/${productId}`);
       if (!response.ok) throw new Error('Không thể tải chi tiết sản phẩm');
       const data = await response.json();
-      setProductDetail(data);
+      setProductDetail({
+        ...product,
+        total_stock: data.total_stock,
+        inventory: data.inventory
+      });
     } catch (err) {
       setError(err.message);
     } finally {

@@ -16,25 +16,25 @@ router = APIRouter(tags=["product"])
 
 @router.get(
     "/product",
-    response_model=list[ProductWithTotalStockOut],
+    response_model=list[ProductOut],
     summary="Liệt kê toàn bộ sản phẩm",
 )
 def list_products(
     include_deleted: bool = Query(False, description="Bao gồm cả sản phẩm đã xóa mềm"),
     db: Session = Depends(get_read_db)
-) -> list[ProductWithTotalStockOut]:
+) -> list[ProductOut]:
     return ProductService(db).list_products(include_deleted=include_deleted)
 
 @router.get(
     "/product/by_category",
-    response_model=list[ProductWithTotalStockOut],
+    response_model=list[ProductOut],
     summary="Liệt kê sản phẩm theo danh mục",
 )
 def list_products_by_category(
     category_id: int = Query(...),
     include_deleted: bool = Query(False, description="Bao gồm cả sản phẩm đã xóa mềm"),
     db: Session = Depends(get_read_db),
-) -> list[ProductWithTotalStockOut]:
+) -> list[ProductOut]:
     return ProductService(db).list_products_by_category(category_id, include_deleted=include_deleted)
 
 @router.get(

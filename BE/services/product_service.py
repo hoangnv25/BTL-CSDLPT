@@ -88,34 +88,25 @@ class ProductService:
         service_log("ProductService", f"Hoàn tất tạo sản phẩm '{row.name}' (ID={row.id}) và ghi log đồng bộ.")
         return out
 
-    def list_products(self, include_deleted: bool = False) -> list[ProductWithTotalStockOut]:
-        from BE.services.inventory_service import InventoryService
-        inv_service = InventoryService(self._session)
-        
+    def list_products(self, include_deleted: bool = False) -> list[ProductOut]:
         rows = self._product_repo.list_all(self._session, include_deleted=include_deleted)
         categories = {c.id: c.name for c in self._category_repo.list_all(self._session)}
         
-        # Gom lô danh sách ID sản phẩm để tính tồn kho phân tán song song một lần duy nhất
-        product_ids = [row.id for row in rows]
-        stock_map = inv_service.get_total_stock_for_products(product_ids)
-        
         result = []
         for row in rows:
-            total_stock = stock_map.get(row.id, 0)
             result.append(
-                ProductWithTotalStockOut(
+                ProductOut(
                     id=row.id,
                     name=row.name,
                     category_id=row.category_id,
                     category_name=categories.get(row.category_id),
                     price=row.price,
-                    total_stock=total_stock,
                     deleted_at=row.deleted_at
                 )
             )
         return result
 
-    def list_products_by_category(self, category_id: int, include_deleted: bool = False) -> list[ProductWithTotalStockOut]:
+    def list_products_by_category(self, category_id: int, include_deleted: bool = False) -> list[ProductOut]:
         category = self._category_repo.find_by_id(self._session, category_id)
         if not category:
             raise HTTPException(
@@ -124,24 +115,15 @@ class ProductService:
             )
         rows = self._product_repo.list_by_category(self._session, category_id, include_deleted=include_deleted)
         
-        from BE.services.inventory_service import InventoryService
-        inv_service = InventoryService(self._session)
-        
-        # Gom lô danh sách ID sản phẩm theo danh mục để tính tồn kho phân tán song song
-        product_ids = [row.id for row in rows]
-        stock_map = inv_service.get_total_stock_for_products(product_ids)
-        
         result = []
         for row in rows:
-            total_stock = stock_map.get(row.id, 0)
             result.append(
-                ProductWithTotalStockOut(
+                ProductOut(
                     id=row.id,
                     name=row.name,
                     category_id=row.category_id,
                     category_name=category.name,
                     price=row.price,
-                    total_stock=total_stock,
                     deleted_at=row.deleted_at
                 )
             )
@@ -187,9 +169,6 @@ class ProductService:
                 detail="Không tìm thấy sản phẩm.",
             )
         
-        category = self._category_repo.find_by_id(self._session, row.category_id)
-        category_name = category.name if category else None
-        
         from BE.services.inventory_service import InventoryService
         invs = InventoryService(self._session).list_by_product(id)
         total_stock = sum(i.stock_quantity for i in invs)
@@ -211,13 +190,8 @@ class ProductService:
 
         return ProductDetailOut(
             id=row.id,
-            name=row.name,
-            category_id=row.category_id,
-            category_name=category_name,
-            price=row.price,
             total_stock=total_stock,
             inventory=inventory_list,
-            deleted_at=row.deleted_at
         )
 
     def update_product(self, id: int, body: ProductUpdate) -> ProductOut:

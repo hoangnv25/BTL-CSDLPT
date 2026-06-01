@@ -23,7 +23,7 @@
   background: var(--primary-color);
   color: white;
   border: none;
-  padding: 0.5rem 1rem;
+  padding: 0.65rem 1.25rem;
   border-radius: 6px;
   font-weight: 500;
   font-size: 14px;
@@ -470,3 +470,147 @@
   gap: 0.5rem;
   line-height: 1.4;
 }
+
+/* Card row for order items */
+.cartItemsList {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.cartItemRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem;
+  background: #fafafa;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  transition: var(--transition);
+}
+
+.cartItemRow:hover {
+  background: var(--surface-hover);
+  border-color: #d8d8d8;
+}
+
+.productSelectorCol {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.quantitySelectorCol {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 120px;
+}
+
+.quantityControlGroup {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: white;
+  overflow: hidden;
+  height: 36px;
+}
+
+.qtyBtn {
+  background: transparent;
+  border: none;
+  width: 32px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: var(--transition);
+}
+
+.qtyBtn:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.qtyBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.qtyInput {
+  width: 44px;
+  height: 100%;
+  border: none;
+  border-left: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
+  text-align: center;
+  font-size: 14px;
+  font-weight: 500;
+  outline: none;
+}
+
+.qtyInput::-webkit-outer-spin-button,
+.qtyInput::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.deleteActionCol {
+  align-self: center;
+}
+
+.trashBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--danger-color);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.trashBtn:hover {
+  background: #fee2e2;
+  border-color: #fecaca;
+}
+
+.stockBadge {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 12px;
+  display: inline-block;
+  margin-top: 4px;
+  width: fit-content;
+}
+
+.stockAvailable {
+  background: #e6f4ea;
+  color: #137333;
+}
+
+.stockWarning {
+  background: #fef7e0;
+  color: #b06000;
+}
+
+.stockEmpty {
+  background: #fce8e6;
+  color: #c5221f;
+}
+
+.stockLoading {
+  background: #f1f3f4;
+  color: #5f6368;
+}
+

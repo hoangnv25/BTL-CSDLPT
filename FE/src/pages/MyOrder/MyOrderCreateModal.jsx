@@ -6,6 +6,7 @@ export default function MyOrderCreateModal({ isOpen, onClose, onSuccess }) {
   const [shippingAddress, setShippingAddress] = useState('');
   const [items, setItems] = useState([{ product_id: '', quantity: 1 }]);
   const [products, setProducts] = useState([]);
+  const [productStockMap, setProductStockMap] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -15,6 +16,7 @@ export default function MyOrderCreateModal({ isOpen, onClose, onSuccess }) {
     if (isOpen) {
       setShippingAddress('');
       setItems([{ product_id: '', quantity: 1 }]);
+      setProductStockMap({});
       setError('');
       fetchProducts();
     }
@@ -41,10 +43,30 @@ export default function MyOrderCreateModal({ isOpen, onClose, onSuccess }) {
     setItems(newItems);
   };
 
+  const fetchProductStock = async (productId) => {
+    if (!productId || productStockMap[productId] !== undefined) return;
+    try {
+      const response = await fetch(`${API_BASE_URL}/product/${productId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setProductStockMap(prev => ({
+          ...prev,
+          [productId]: data.total_stock
+        }));
+      }
+    } catch (err) {
+      console.error("Lỗi lấy tồn kho sản phẩm:", err);
+    }
+  };
+
   const handleItemChange = (index, field, value) => {
     const newItems = [...items];
     newItems[index][field] = value;
     setItems(newItems);
+
+    if (field === 'product_id' && value) {
+      fetchProductStock(value);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -127,56 +149,102 @@ export default function MyOrderCreateModal({ isOpen, onClose, onSuccess }) {
             <div className={styles.cartSection}>
               <div className={styles.cartHeader}>
                 <h3>Giỏ Hàng</h3>
-                <button type="button" className={styles.addBtn} onClick={handleAddItem} style={{ padding: '0.25rem 0.5rem', fontSize: '12px' }}>
+                <button type="button" className={styles.addBtn} onClick={handleAddItem}>
                   <Plus size={14} weight="bold" /> Thêm SP
                 </button>
               </div>
 
-              <table className={styles.cartTable}>
-                <thead>
-                  <tr>
-                    <th style={{ width: '60%' }}>Sản Phẩm</th>
-                    <th style={{ width: '25%', textAlign: 'center' }}>Số Lượng</th>
-                    <th style={{ width: '15%', textAlign: 'center' }}>Xóa</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item, index) => (
-                    <tr key={index}>
-                      <td>
+              <div className={styles.cartItemsList}>
+                {items.map((item, index) => {
+                  const stock = productStockMap[item.product_id];
+                  let stockBadgeClass = styles.stockLoading;
+                  let stockText = 'Đang kiểm tra tồn kho...';
+                  
+                  if (item.product_id && stock !== undefined) {
+                    if (stock === 0) {
+                      stockBadgeClass = styles.stockEmpty;
+                      stockText = 'Hết hàng';
+                    } else if (stock <= 5) {
+                      stockBadgeClass = styles.stockWarning;
+                      stockText = `Tồn kho hạn chế: ${stock}`;
+                    } else {
+                      stockBadgeClass = styles.stockAvailable;
+                      stockText = `Tồn kho khả dụng: ${stock}`;
+                    }
+                  }
+
+                  return (
+                    <div key={index} className={styles.cartItemRow}>
+                      <div className={styles.productSelectorCol}>
+                        <label className={styles.label} style={{ marginBottom: '4px', fontSize: '11px', fontWeight: '500' }}>
+                          Sản phẩm {items.length > 1 ? `#${index + 1}` : ''}
+                        </label>
                         <select 
                           className={styles.productSelect}
                           value={item.product_id}
                           onChange={(e) => handleItemChange(index, 'product_id', e.target.value)}
                           required
+                          style={{ height: '36px', padding: '0.4rem 0.75rem', fontSize: '14px' }}
                         >
                           <option value="">-- Chọn Sản Phẩm --</option>
                           {products.map(p => (
-                            <option key={p.id} value={p.id}>{p.name} (Tồn: {p.total_stock || p.stock_quantity || 0})</option>
+                            <option key={p.id} value={p.id}>{p.name}</option>
                           ))}
                         </select>
-                      </td>
-                      <td style={{ textAlign: 'center' }}>
-                        <input 
-                          type="number" 
-                          className={styles.quantityInput}
-                          value={item.quantity}
-                          onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                          min="1"
-                          required
-                        />
-                      </td>
-                      <td style={{ textAlign: 'center' }}>
+                        {item.product_id && (
+                          <span className={`${styles.stockBadge} ${stockBadgeClass}`}>
+                            {stockText}
+                          </span>
+                        )}
+                      </div>
+                      
+                      <div className={styles.quantitySelectorCol}>
+                        <label className={styles.label} style={{ marginBottom: '4px', fontSize: '11px', fontWeight: '500' }}>
+                          Số lượng
+                        </label>
+                        <div className={styles.quantityControlGroup}>
+                          <button 
+                            type="button" 
+                            className={styles.qtyBtn}
+                            onClick={() => handleItemChange(index, 'quantity', Math.max(1, parseInt(item.quantity || 1) - 1))}
+                            disabled={parseInt(item.quantity || 1) <= 1}
+                          >
+                            -
+                          </button>
+                          <input 
+                            type="number" 
+                            className={styles.qtyInput}
+                            value={item.quantity}
+                            onChange={(e) => handleItemChange(index, 'quantity', Math.max(1, parseInt(e.target.value) || 1))}
+                            min="1"
+                            required
+                          />
+                          <button 
+                            type="button" 
+                            className={styles.qtyBtn}
+                            onClick={() => handleItemChange(index, 'quantity', parseInt(item.quantity || 1) + 1)}
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className={styles.deleteActionCol}>
                         {items.length > 1 && (
-                          <button type="button" className={styles.removeBtn} onClick={() => handleRemoveItem(index)}>
-                            <Trash size={16} />
+                          <button 
+                            type="button" 
+                            className={styles.trashBtn} 
+                            onClick={() => handleRemoveItem(index)}
+                            title="Xóa sản phẩm"
+                          >
+                            <Trash size={18} weight="bold" />
                           </button>
                         )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
             <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
               * Hệ thống sẽ tự động phân bổ kiện hàng (Package) dựa trên thuật toán ưu tiên Kho có số lượng tồn nhiều nhất.

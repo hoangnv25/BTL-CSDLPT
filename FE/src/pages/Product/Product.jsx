@@ -29,6 +29,7 @@ export default function Product() {
   // State quản lý Modal Chi Tiết
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [detailProductId, setDetailProductId] = useState(null);
+  const [detailProduct, setDetailProduct] = useState(null);
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
@@ -119,8 +120,9 @@ export default function Product() {
     setIsModalOpen(true);
   };
 
-  const handleOpenDetail = (id) => {
-    setDetailProductId(id);
+  const handleOpenDetail = (product) => {
+    setDetailProduct(product);
+    setDetailProductId(product.id);
     setIsDetailOpen(true);
   };
 
@@ -311,22 +313,21 @@ export default function Product() {
             <thead>
               <tr>
                 <th className={styles.th} style={{ width: '8%' }}>ID</th>
-                <th className={styles.th} style={{ width: '32%' }}>Tên Sản Phẩm</th>
+                <th className={styles.th} style={{ width: '40%' }}>Tên Sản Phẩm</th>
                 <th className={styles.th} style={{ width: '15%' }}>Danh Mục</th>
                 <th className={styles.th} style={{ width: '15%' }}>Trạng Thái</th>
                 <th className={styles.th} style={{ width: '12%', textAlign: 'right' }}>Giá Bán</th>
-                <th className={styles.th} style={{ width: '8%', textAlign: 'center' }}>Tồn Kho</th>
                 <th className={styles.th} style={{ width: '10%', textAlign: 'right' }}>Thao Tác</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="7" className={styles.emptyState}>Đang tải dữ liệu...</td>
+                  <td colSpan="6" className={styles.emptyState}>Đang tải dữ liệu...</td>
                 </tr>
               ) : currentData.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className={styles.emptyState}>Không tìm thấy sản phẩm nào phù hợp.</td>
+                  <td colSpan="6" className={styles.emptyState}>Không tìm thấy sản phẩm nào phù hợp.</td>
                 </tr>
               ) : (
                 currentData.map((prod) => (
@@ -363,15 +364,12 @@ export default function Product() {
                     <td className={styles.td} style={{ textAlign: 'right', fontWeight: '500' }}>
                       {formatCurrency(prod.price)}
                     </td>
-                    <td className={styles.td} style={{ textAlign: 'center' }}>
-                      {prod.total_stock !== undefined ? prod.total_stock : prod.stock_quantity}
-                    </td>
                     <td className={styles.td}>
                       <div className={styles.actions} style={{ justifyContent: 'flex-end' }}>
                         <button 
                           className={`${styles.actionBtn}`} 
                           title="Xem chi tiết"
-                          onClick={() => handleOpenDetail(prod.id)}
+                          onClick={() => handleOpenDetail(prod)}
                           style={{ color: 'var(--primary-color)' }}
                         >
                           <Eye size={16} weight="bold" />
@@ -427,6 +425,7 @@ export default function Product() {
         isOpen={isDetailOpen}
         onClose={() => setIsDetailOpen(false)}
         productId={detailProductId}
+        product={detailProduct}
       />
     </div>
   );
