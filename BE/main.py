@@ -41,6 +41,31 @@ async def schedule_stats_sync():
         except Exception as e:
             print(f"[DailyStats] Lỗi khi chạy đồng bộ định kỳ: {e}")
 
+
+async def heartbeat_check_nodes():
+    """Vòng lặp ngầm kiểm tra sức khỏe của các Node DB mỗi 5 giây"""
+    from BE.database import engines, circuit_breaker
+    
+    def check_nodes():
+        for node_name, engine in engines.items():
+            if node_name == "main":
+                continue
+            try:
+                with engine.connect() as conn:
+                    conn.execute(text("SELECT 1"))
+                if not circuit_breaker.is_online(node_name):
+                    circuit_breaker.mark_success(node_name)
+                    print(f"[Heartbeat] Node {node_name.upper()} đã hoạt động trở lại. Đánh dấu ONLINE.")
+            except Exception:
+                if circuit_breaker.is_online(node_name):
+                    circuit_breaker.mark_failure(node_name)
+                    print(f"[Heartbeat] Node {node_name.upper()} gặp sự cố. Đánh dấu OFFLINE.")
+                
+    while True:
+        await asyncio.sleep(5.0)
+        await asyncio.to_thread(check_nodes)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from BE.utils.migration import migrate_main_inventories_to_shards
@@ -48,16 +73,18 @@ async def lifespan(app: FastAPI):
     
     # Kích hoạt worker đồng bộ thống kê định kỳ
     asyncio.create_task(schedule_stats_sync())
+    # Kích hoạt heartbeat kiểm tra sức khỏe các node phụ
+    asyncio.create_task(heartbeat_check_nodes())
 
     # 1. Tạo tất cả các bảng ở Main DB (Trung tâm), ngoại trừ dữ liệu phân mảnh (inventories, packages,...)
     if "main" in engines:
         try:
             main_tables = [
                 table for name, table in Base.metadata.tables.items()
-                if name not in ["inventories", "packages", "package_details"]
+                if name not in ["inventories", "packages", "package_details", "warehouses"]
             ]
             Base.metadata.create_all(bind=engines["main"], tables=main_tables)
-            print("Đã khởi tạo toàn bộ cấu trúc bảng cho Main DB (ngoại trừ dữ liệu sharding tồn kho/kiện hàng).")
+            print("Đã khởi tạo toàn bộ cấu trúc bảng cho Main DB (ngoại trừ dữ liệu sharding tồn kho/kiện hàng/kho hàng).")
 
         except Exception as e:
             print(f"Error: Không thể khởi tạo bảng cho Main DB: {e}")

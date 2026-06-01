@@ -485,40 +485,24 @@ def migrate_warehouses_to_shards():
         return
         
     with main_engine.connect() as main_conn:
+        # Kiểm tra xem bảng warehouses vật lý ở Main DB có tồn tại và có dữ liệu không
         try:
             inspector = inspect(main_engine)
-            # Kiểm tra xem bảng warehouses ở Main DB có dữ liệu không
-            # Nếu chưa có/trống, ta sẽ thu thập từ các node để phục hồi Catalog trung tâm
             if "warehouses" not in inspector.get_table_names():
-                migration_log("Bảng warehouses chưa tồn tại ở Main DB. Sẽ được khởi tạo lại.")
-                warehouses_raw = []
-            else:
-                warehouses_raw = main_conn.execute(text("SELECT id, name, region, address FROM warehouses")).all()
+                migration_log("Bảng warehouses vật lý không tồn tại ở Main DB (có thể đã được di trú trước đó).")
+                return
             
+            warehouses_raw = main_conn.execute(text("SELECT id, name, region, address FROM warehouses")).all()
             if not warehouses_raw:
-                migration_log("Bảng warehouses ở Main DB đang trống. Đang thu thập dữ liệu từ các Node phụ để phục hồi Central Catalog...")
-                all_collected = []
-                for node in ["north", "central", "south"]:
-                    if circuit_breaker.is_available(node):
-                        try:
-                            with engines[node].connect() as node_conn:
-                                node_whs = node_conn.execute(text("SELECT id, name, region, address FROM warehouses")).all()
-                                all_collected.extend(node_whs)
-                                for w in node_whs:
-                                    main_conn.execute(
-                                        text("INSERT IGNORE INTO warehouses (id, name, region, address) VALUES (:id, :name, :region, :address)"),
-                                        {"id": w[0], "name": w[1], "region": w[2], "address": w[3]}
-                                    )
-                                main_conn.commit()
-                        except Exception as e:
-                            migration_log(f"Lỗi phục hồi kho hàng từ node {node}: {e}")
-                migration_log(f"Đã phục hồi {len(all_collected)} kho hàng về Main DB (Central Catalog).")
-                return # Đã có dữ liệu, không cần chạy phần di trú xuôi nữa
+                # Xóa bảng trống ở Main DB để tránh nhầm lẫn
+                migration_log("Bảng warehouses ở Main DB rỗng. Đang xóa bảng vật lý tại Main DB...")
+                main_conn.execute(text("DROP TABLE IF EXISTS warehouses;"))
+                return
         except Exception as e:
-            migration_log(f"Lỗi kiểm tra/phục hồi Catalog kho hàng ở Main DB: {e}")
+            migration_log(f"Lỗi kiểm tra bảng warehouses ở Main DB: {e}")
             return
             
-    migration_log(f"Bắt đầu đồng bộ xuôi {len(warehouses_raw)} kho hàng từ Catalog sang các Node phụ tương ứng...")
+    migration_log(f"Bắt đầu di trú {len(warehouses_raw)} kho hàng sang các Node phụ tương ứng...")
     
     # Đẩy dữ liệu về các Node phụ
     for wh in warehouses_raw:
@@ -558,7 +542,16 @@ def migrate_warehouses_to_shards():
         finally:
             node_session.close()
             
-    migration_log("Hoàn tất đồng bộ dữ liệu kho hàng giữa Main và các Node chi nhánh.")
+    # Xóa bảng vật lý warehouses ở Main DB để hoàn tất phân tán nguyên thủy
+    migration_log("Hoàn tất di trú dữ liệu kho hàng. Đang dọn dẹp bảng 'warehouses' vật lý trên Main DB...")
+    with main_engine.begin() as conn:
+        try:
+            conn.execute(text("SET FOREIGN_KEY_CHECKS = 0;"))
+            conn.execute(text("DROP TABLE IF EXISTS warehouses;"))
+            conn.execute(text("SET FOREIGN_KEY_CHECKS = 1;"))
+            migration_log("Hoàn tất di trú bảng warehouses. Bảng vật lý ở Main DB đã được dọn dẹp.")
+        except Exception as e:
+            migration_log(f"CẢNH BÁO: Không thể DROP bảng warehouses trên Main DB: {e}")
 
 
 def setup_node_foreign_keys(site_name: str, db_engine):
