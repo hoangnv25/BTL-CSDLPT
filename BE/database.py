@@ -129,8 +129,6 @@ def get_read_db(request: Request) -> Generator[Session, None, None]:
     if target_node == "auto":
         nodes_to_try = ["north", "central", "south"]
         random.shuffle(nodes_to_try)
-    elif target_node in ["north", "central", "south"]:
-        nodes_to_try = [target_node]
         
     for node in nodes_to_try:
         if circuit_breaker.is_available(node):

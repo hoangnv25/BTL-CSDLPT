@@ -45,7 +45,7 @@ def list_products_by_category(
 def list_products_by_warehouse(
     warehouse_id: int = Query(...),
     include_deleted: bool = Query(False, description="Bao gồm cả sản phẩm đã xóa mềm"),
-    db: Session = Depends(get_read_db),
+    db: Session = Depends(get_db),
 ) -> list[ProductWithWarehouseStockOut]:
     return ProductService(db).list_products_by_warehouse(warehouse_id, include_deleted=include_deleted)
 
@@ -63,7 +63,7 @@ def create_product(body: ProductCreate, db: Session = Depends(get_db)) -> Produc
     response_model=ProductDetailOut,
     summary="Lấy chi tiết một sản phẩm, có cả tồn kho từng kho",
 )
-def get_product(id: int, db: Session = Depends(get_read_db)) -> ProductDetailOut:
+def get_product(id: int, db: Session = Depends(get_db)) -> ProductDetailOut:
     return ProductService(db).get_product(id)
 
 @router.put(

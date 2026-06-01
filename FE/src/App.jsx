@@ -41,45 +41,23 @@ window.fetch = async function (...args) {
 function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [activeTab, setActiveTab] = useState('order'); // Mặc định vào order để test
-  const [warehouseRegionMap, setWarehouseRegionMap] = useState({});
 
   // State quản lý việc giả lập vai trò & kho
   const [currentOption, setCurrentOption] = useState('admin');
 
-  // Khởi tạo bản đồ ánh xạ khu vực kho hàng để phục vụ Load Balancing
-  useEffect(() => {
-    originalFetch('http://localhost:8000/warehouse')
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          const mapping = {};
-          data.forEach(wh => {
-            mapping[wh.id] = wh.region.toLowerCase();
-          });
-          setWarehouseRegionMap(mapping);
-        }
-      })
-      .catch(err => console.error("Không thể tải danh sách kho để phân luồng đọc:", err));
-  }, []);
-
   // Phân tích role và warehouseId từ currentOption
   let role = 'admin';
-  let warehouseId = 1; // Giá trị mặc định phòng hờ
+  let warehouseId = 1;
 
   if (currentOption === 'user') {
     role = 'user';
-    window.targetNode = 'auto'; // Load balancing ngẫu nhiên ở backend
   } else if (currentOption.startsWith('manager_')) {
     role = 'manager';
     warehouseId = parseInt(currentOption.split('_')[1], 10);
-    // Tự động dò ra region của kho này từ bản đồ vừa tải
-    window.targetNode = warehouseRegionMap[warehouseId] || 'main';
-  } else {
-    window.targetNode = 'main'; // Admin đọc từ main
   }
+  window.targetNode = (role === 'user') ? 'auto' : 'main';
 
   // Khi thay đổi Vai trò/Kho, nếu activeTab không thuộc quyền truy cập của vai trò mới,
-  // tự động nhảy sang tab đầu tiên được cho phép để tránh giao diện trống hoặc lỗi
   useEffect(() => {
     const allowed = roleAllowedPages[role] || [];
     if (!allowed.includes(activeTab)) {
