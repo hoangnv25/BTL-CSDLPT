@@ -112,11 +112,11 @@ async def lifespan(app: FastAPI):
             # 2b. Đồng bộ cấu trúc bảng và vá dữ liệu
             with db_engine.begin() as conn:
                 inspector = inspect(db_engine) # Refresh inspector
-                # 1. Xử lý bảng packages (Xóa cột delivered_at nếu tồn tại theo yêu cầu mới)
+                # 1. Xử lý bảng packages (Thêm cột delivered_at nếu chưa tồn tại theo yêu cầu mới)
                 columns_pkg = [c['name'] for c in inspector.get_columns('packages')]
-                if 'delivered_at' in columns_pkg:
-                    conn.execute(text("ALTER TABLE packages DROP COLUMN delivered_at;"))
-                    print(f"Đã xóa cột delivered_at khỏi bảng packages trên Node: {site_name}")
+                if 'delivered_at' not in columns_pkg:
+                    conn.execute(text("ALTER TABLE packages ADD COLUMN delivered_at DATETIME NULL;"))
+                    print(f"Đã thêm cột delivered_at vào bảng packages trên Node: {site_name}")
             
             # 2c. Dọn dẹp và xóa toàn bộ bảng không cần thiết trên Node phụ
             inspector = inspect(db_engine)

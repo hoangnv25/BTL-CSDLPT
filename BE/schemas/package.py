@@ -15,6 +15,7 @@ class PackageSimpleOut(BaseModel):
     order_id: int
     warehouse_id: int
     status: PackageStatusEnum
+    delivered_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -34,6 +35,7 @@ class PackageFullOut(BaseModel):
     warehouse: WarehouseOut
     status: PackageStatusEnum
     created_at: datetime
+    delivered_at: datetime | None = None
     order: OrderForPackageOut
     items: list[PackageItemOut]
 

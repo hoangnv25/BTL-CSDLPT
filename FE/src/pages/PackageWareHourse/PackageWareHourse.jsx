@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Truck, MapPin, CalendarBlank, ShoppingBag } from '@phosphor-icons/react';
+import { Truck, MapPin, CalendarBlank, ShoppingBag, Clock, CheckCircle } from '@phosphor-icons/react';
 import { Pagination } from 'antd';
 import styles from './PackageWareHourse.module.css';
 import { formatToVietnamTime } from '../../utils/dateTime';
@@ -48,10 +48,11 @@ export default function PackageWareHourse({ warehouse_id = 1 }) {
         body: JSON.stringify({ status: newStatus }),
       });
       if (!response.ok) throw new Error('Cập nhật trạng thái thất bại');
+      const updatedPkg = await response.json();
       
       // Cập nhật state nội bộ
       setPackages(prev => 
-        prev.map(pkg => pkg.id === packageId ? { ...pkg, status: newStatus } : pkg)
+        prev.map(pkg => pkg.id === packageId ? { ...pkg, status: newStatus, delivered_at: updatedPkg.delivered_at } : pkg)
       );
     } catch (err) {
       alert(err.message);
@@ -87,11 +88,11 @@ export default function PackageWareHourse({ warehouse_id = 1 }) {
           <table className={styles.table}>
             <thead>
               <tr>
-                <th className={styles.th} style={{ width: '10%' }}>ID Kiện</th>
+                <th className={styles.th} style={{ width: '8%' }}>ID Kiện</th>
                 <th className={styles.th} style={{ width: '18%' }}>Kho Xuất</th>
-                <th className={styles.th} style={{ width: '22%' }}>Khách Hàng / Đơn Hàng</th>
-                <th className={styles.th} style={{ width: '30%' }}>Danh Sách Sản Phẩm</th>
-                <th className={styles.th} style={{ width: '12%', textAlign: 'right' }}>Ngày Tạo</th>
+                <th className={styles.th} style={{ width: '20%' }}>Khách Hàng / Đơn Hàng</th>
+                <th className={styles.th} style={{ width: '26%' }}>Danh Sách Sản Phẩm</th>
+                <th className={styles.th} style={{ width: '20%' }}>Thời Gian</th>
                 <th className={styles.th} style={{ width: '8%', textAlign: 'right' }}>Trạng Thái</th>
               </tr>
             </thead>
@@ -133,10 +134,23 @@ export default function PackageWareHourse({ warehouse_id = 1 }) {
                         ))}
                       </div>
                     </td>
-                    <td className={styles.td} style={{ textAlign: 'right', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', justifyContent: 'flex-end' }}>
-                        <CalendarBlank size={14} />
-                        {formatToVietnamTime(pkg.created_at)}
+                    <td className={styles.td} style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }} title="Ngày tạo kiện">
+                          <CalendarBlank size={14} />
+                          <span>Tạo: {formatToVietnamTime(pkg.created_at)}</span>
+                        </div>
+                        {pkg.delivered_at ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: 'var(--success-color)', fontWeight: '500' }} title="Ngày giao hàng">
+                            <CheckCircle size={14} weight="bold" />
+                            <span>Giao: {formatToVietnamTime(pkg.delivered_at)}</span>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', opacity: 0.65 }} title="Chưa giao hàng">
+                            <Clock size={14} />
+                            <span>Chưa giao</span>
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className={styles.td} style={{ textAlign: 'right' }}>

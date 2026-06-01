@@ -77,9 +77,12 @@ class PackageService:
             new_status = request.status
             row.status = new_status
             
-            # Nếu trạng thái chuyển sang Delivered, việc tổng hợp báo cáo sẽ được thực hiện định kỳ ở DB trung tâm
-            if new_status == PackageStatusEnum.Delivered and old_status != PackageStatusEnum.Delivered:
-                package_service_log(f"Kiện hàng ID={package_id} đã được giao. Dữ liệu sẽ được tổng hợp về DB tập trung định kỳ.")
+            # Nếu trạng thái chuyển sang Delivered, ghi nhận thời gian giao hàng
+            if new_status == PackageStatusEnum.Delivered:
+                row.delivered_at = datetime.utcnow()
+                package_service_log(f"Kiện hàng ID={package_id} đã được giao lúc {row.delivered_at}. Dữ liệu sẽ được tổng hợp về DB tập trung định kỳ.")
+            else:
+                row.delivered_at = None
 
             node_session.commit()
             
@@ -88,7 +91,8 @@ class PackageService:
                 id=row.id,
                 order_id=row.order_id,
                 warehouse_id=row.warehouse_id,
-                status=row.status
+                status=row.status,
+                delivered_at=row.delivered_at
             )
         except Exception as e:
             node_session.rollback()
@@ -151,6 +155,7 @@ class PackageService:
                             "warehouse_id": p.warehouse_id,
                             "status": p.status,
                             "created_at": p.created_at,
+                            "delivered_at": p.delivered_at,
                             "details": details_map.get(p.id, [])
                         })
                     circuit_breaker.mark_success(node)
@@ -246,6 +251,7 @@ class PackageService:
                         warehouse=wh_out,
                         status=p["status"],
                         created_at=p["created_at"],
+                        delivered_at=p["delivered_at"],
                         order=ord_out,
                         items=items_out
                     )
