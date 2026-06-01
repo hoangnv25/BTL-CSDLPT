@@ -504,14 +504,16 @@ def migrate_warehouses_to_shards():
                             with engines[node].connect() as node_conn:
                                 node_whs = node_conn.execute(text("SELECT id, name, region, address FROM warehouses")).all()
                                 all_collected.extend(node_whs)
-                            except Exception:
-                                pass
-                            main_write_conn.execute(
-                                text("INSERT IGNORE INTO warehouses (id, name, region, address) VALUES (:id, :name, :region, :address)"),
-                                {"id": w[0], "name": w[1], "region": w[2], "address": w[3]}
-                            )
-                    migration_log(f"Đã phục hồi {len(all_collected)} kho hàng về Main DB (Central Catalog).")
-                    return # Đã có dữ liệu, không cần chạy phần di trú xuôi nữa
+                                for w in node_whs:
+                                    main_conn.execute(
+                                        text("INSERT IGNORE INTO warehouses (id, name, region, address) VALUES (:id, :name, :region, :address)"),
+                                        {"id": w[0], "name": w[1], "region": w[2], "address": w[3]}
+                                    )
+                                main_conn.commit()
+                        except Exception as e:
+                            migration_log(f"Lỗi phục hồi kho hàng từ node {node}: {e}")
+                migration_log(f"Đã phục hồi {len(all_collected)} kho hàng về Main DB (Central Catalog).")
+                return # Đã có dữ liệu, không cần chạy phần di trú xuôi nữa
         except Exception as e:
             migration_log(f"Lỗi kiểm tra/phục hồi Catalog kho hàng ở Main DB: {e}")
             return
@@ -557,6 +559,20 @@ def migrate_warehouses_to_shards():
             node_session.close()
             
     migration_log("Hoàn tất đồng bộ dữ liệu kho hàng giữa Main và các Node chi nhánh.")
+
+
+def setup_node_foreign_keys(site_name: str, db_engine):
+    """Thiết lập khóa ngoại vật lý fk_inventories_warehouses và fk_packages_warehouses trên Node phụ"""
+    migration_log(f"Đang kiểm tra/thiết lập khóa ngoại vật lý cho Node: [{site_name}]...")
+    with db_engine.begin() as conn:
+        # 1. Khóa ngoại cho inventories
+        try:
+            exists = conn.execute(text("""
+                SELECT 1 FROM information_schema.table_constraints 
+                WHERE constraint_schema = DATABASE() 
+                  AND table_name = 'inventories' 
+                  AND constraint_name = 'fk_inventories_warehouses'
+            """)).first()
             if not exists:
                 conn.execute(text("SET FOREIGN_KEY_CHECKS = 0;"))
                 conn.execute(text("""
@@ -598,5 +614,3 @@ def migrate_warehouses_to_shards():
                 conn.execute(text("SET FOREIGN_KEY_CHECKS = 1;"))
             except:
                 pass
-
-

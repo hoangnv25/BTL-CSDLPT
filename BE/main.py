@@ -26,7 +26,7 @@ async def schedule_stats_sync():
     while True:
         now = datetime.now()
         # Chạy lúc 1:00 sáng
-        target = now.replace(hour=12, minute=40, second=0, microsecond=0)
+        target = now.replace(hour=14, minute=31, second=0, microsecond=0)
         if now >= target:
             target += timedelta(days=1)
         
@@ -77,20 +77,10 @@ async def lifespan(app: FastAPI):
             print(f"Circuit Breaker: Bỏ qua tạo bảng cho Node [{site_name}] do đang OFFLINE.")
             return False
         try:
-            # 2a. Xử lý di trú tên bảng TRƯỚC khi SQLAlchemy create_all tạo bảng mới
-            inspector = inspect(db_engine)
-            existing_tables = inspector.get_table_names()
-            
-            with db_engine.begin() as conn:
-                # Đổi tên product_sales_stats -> package_sales_stats nếu bảng cũ tồn tại và bảng mới chưa có
-                if 'product_sales_stats' in existing_tables and 'package_sales_stats' not in existing_tables:
-                    conn.execute(text("RENAME TABLE product_sales_stats TO package_sales_stats;"))
-                    print(f"[Migration] Đã đổi tên bảng product_sales_stats -> package_sales_stats trên Node: {site_name}")
-            
-            # 2b. Tạo các bảng cần thiết (SQLAlchemy sẽ tạo những bảng còn thiếu)
+            # 2a. Tạo các bảng cần thiết (SQLAlchemy sẽ tạo những bảng còn thiếu)
             Base.metadata.create_all(bind=db_engine, tables=node_tables)
             
-            # 2c. Đồng bộ cấu trúc bảng và vá dữ liệu
+            # 2b. Đồng bộ cấu trúc bảng và vá dữ liệu
             with db_engine.begin() as conn:
                 inspector = inspect(db_engine) # Refresh inspector
                 # 1. Xử lý bảng packages (Xóa cột delivered_at nếu tồn tại theo yêu cầu mới)
@@ -98,67 +88,12 @@ async def lifespan(app: FastAPI):
                 if 'delivered_at' in columns_pkg:
                     conn.execute(text("ALTER TABLE packages DROP COLUMN delivered_at;"))
                     print(f"Đã xóa cột delivered_at khỏi bảng packages trên Node: {site_name}")
-                
-                # 2. Xử lý bảng thống kê
-                columns_stats = [c['name'] for c in inspector.get_columns('package_sales_stats')]
-                
-                # Thêm các cột nếu thiếu
-                if 'package_count' not in columns_stats:
-                    conn.execute(text("ALTER TABLE package_sales_stats ADD COLUMN package_count INT NOT NULL DEFAULT 0;"))
-                if 'revenue' not in columns_stats:
-                    conn.execute(text("ALTER TABLE package_sales_stats ADD COLUMN revenue DOUBLE NOT NULL DEFAULT 0;"))
-
-                # --- PHỤC HỒI DỮ LIỆU THỐNG KÊ TỪ CÁC KIỆN HÀNG ĐÃ GIAO ---
-                # 1. Lấy danh sách các kiện hàng đã giao nhưng chưa có trong stats
-                # Chúng ta sẽ sử dụng created_at để tạm làm ngày giao cho dữ liệu cũ
-                conn.execute(text("""
-                    INSERT INTO package_sales_stats (product_id, warehouse_id, delivered_at, quantity, revenue, package_count)
-                    SELECT 
-                        pd.product_id, 
-                        p.warehouse_id, 
-                        DATE(p.created_at) as del_date,
-                        SUM(pd.quantity) as qty,
-                        SUM(pd.quantity * prod.price) as rev,
-                        0 as pkg_c
-                    FROM packages p
-                    JOIN package_details pd ON p.id = pd.package_id
-                    JOIN products prod ON pd.product_id = prod.id
-                    WHERE p.status = 'Delivered'
-                    GROUP BY pd.product_id, p.warehouse_id, del_date
-                    ON DUPLICATE KEY UPDATE 
-                        quantity = quantity, 
-                        revenue = revenue;
-                """))
-
-                # 2. Vá package_count (Chỉ đếm 1 kiện hàng 1 lần)
-                # Cách làm: Với mỗi package ID, chọn 1 product_id bất kỳ để gán package_count = 1
-                conn.execute(text("""
-                    UPDATE package_sales_stats s
-                    JOIN (
-                        SELECT 
-                            pd.product_id, 
-                            p.warehouse_id, 
-                            DATE(p.created_at) as del_date,
-                            COUNT(DISTINCT p.id) as real_pkg_count
-                        FROM packages p
-                        JOIN package_details pd ON p.id = pd.package_id
-                        WHERE p.status = 'Delivered'
-                        AND pd.id IN (
-                            SELECT MIN(id) FROM package_details GROUP BY package_id
-                        )
-                        GROUP BY pd.product_id, p.warehouse_id, del_date
-                    ) AS src ON s.product_id = src.product_id 
-                        AND s.warehouse_id = src.warehouse_id 
-                        AND s.delivered_at = src.del_date
-                    SET s.package_count = src.real_pkg_count;
-                """))
-                print(f"[Migration] Đã phục hồi dữ liệu thống kê từ {site_name}")
             
-            # 2d. Dọn dẹp và xóa toàn bộ bảng không cần thiết trên Node phụ
+            # 2c. Dọn dẹp và xóa toàn bộ bảng không cần thiết trên Node phụ
             inspector = inspect(db_engine)
             existing_tables = inspector.get_table_names()
             for tbl in existing_tables:
-                if tbl not in DISTRIBUTED_TABLE_NAMES and tbl != 'product_sales_stats':
+                if tbl not in DISTRIBUTED_TABLE_NAMES:
                     with db_engine.begin() as conn:
                         conn.execute(text("SET FOREIGN_KEY_CHECKS = 0;"))
                         conn.execute(text(f"DROP TABLE IF EXISTS `{tbl}`;"))
