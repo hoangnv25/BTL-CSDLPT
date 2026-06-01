@@ -20,6 +20,7 @@ import ProductView from './pages/ProductView/ProductView';
 import InventoryWareHourse from './pages/InventoryWareHourse/InventoryWareHourse';
 import Stats from './pages/Stats/Stats';
 import NotificationBell from './components/NotificationBell/NotificationBell';
+import Customer from './pages/Customer/Customer';
 import { roleAllowedPages } from './components/Sidebar/roles';
 
 // Monkey patch fetch để tự động đính kèm Header định tuyến X-Target-Node
@@ -116,6 +117,8 @@ function App() {
         return <ProductView />;
       case 'inventory_warehouse':
         return <InventoryWareHourse warehouse_id={warehouseId} key={`inv-wh-${warehouseId}`} />;
+      case 'customer':
+        return <Customer />;
       default:
         return <div>Page Not Found</div>;
     }

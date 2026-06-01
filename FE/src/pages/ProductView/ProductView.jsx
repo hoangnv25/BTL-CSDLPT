@@ -149,7 +149,7 @@ export default function ProductView() {
           </select>
         </div>
         
-        <div className={styles.filterGroup}>
+        {/* <div className={styles.filterGroup}>
           <label className={styles.filterLabel}>Kho hàng:</label>
           <select 
             className={styles.filterSelect}
@@ -159,7 +159,7 @@ export default function ProductView() {
             <option value="">-- Tất cả kho --</option>
             {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
           </select>
-        </div>
+        </div> */}
       </div>
 
       {error && <div style={{ color: 'var(--danger-color)', fontSize: '14px' }}>{error}</div>}

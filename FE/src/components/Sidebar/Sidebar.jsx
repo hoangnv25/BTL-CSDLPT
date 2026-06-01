@@ -1,5 +1,5 @@
 import React from 'react';
-import { Package, ListDashes, SignOut, Warehouse as WarehouseIcon, Stack, Truck, Receipt, Eye, Database, ChartBar } from '@phosphor-icons/react';
+import { Package, ListDashes, SignOut, Warehouse as WarehouseIcon, Stack, Truck, Receipt, Eye, Database, ChartBar, Users } from '@phosphor-icons/react';
 import styles from './Sidebar.module.css';
 import RoleDropdown from './RoleDropdown';
 import { roleAllowedPages } from './roles';
@@ -17,22 +17,27 @@ export default function Sidebar({
   let role = 'admin';
   if (currentOption === 'user') {
     role = 'user';
-  } else if (currentOption.startsWith('manager_')) {
+  } 
+  else if (currentOption === 'host') {
+    role = 'host';
+  }
+  else if (currentOption.startsWith('manager_')) {
     role = 'manager';
   }
 
   const allMenuItems = [
-    { id: 'order', label: 'Quản Lý Đơn Hàng', icon: Package },
     { id: 'stats', label: 'Thống Kê', icon: ChartBar },
+    { id: 'customer', label: 'Khách Hàng', icon: Users },
     { id: 'category', label: 'Danh Mục Sản Phẩm', icon: ListDashes },
     { id: 'product', label: 'Sản Phẩm', icon: Package },
     { id: 'warehouse', label: 'Kho Hàng', icon: WarehouseIcon },
     { id: 'inventory', label: 'Tồn Kho', icon: Stack },
-    { id: 'package', label: 'Kiện Hàng', icon: Truck },
+    { id: 'order', label: 'Quản Lý Đơn Hàng', icon: Package },
+    { id: 'package', label: 'Quản lý Kiện Hàng', icon: Truck },
     { id: 'package_warehouse', label: 'Kiện Hàng Theo Kho', icon: Truck },
-    { id: 'my_order', label: 'Đơn Hàng', icon: Receipt },
-    { id: 'product_view', label: 'Xem Sản Phẩm', icon: Eye },
     { id: 'inventory_warehouse', label: 'Tồn Kho Theo Kho', icon: Database },
+    { id: 'product_view', label: 'Xem Sản Phẩm', icon: Eye },
+    { id: 'my_order', label: 'Đơn Hàng', icon: Receipt },
   ];
 
   // Lọc các tab menu được hiển thị dựa trên role hiện tại

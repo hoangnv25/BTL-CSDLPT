@@ -28,8 +28,9 @@ export default function RoleDropdown({ currentOption, onChange }) {
         value={currentOption} 
         onChange={(e) => onChange(e.target.value)}
       >
+        <option value="admin">Quản trị</option>
+        <option value="host">Quản lý tổng</option>
         <option value="user">Khách Hàng</option>
-        <option value="admin">Quản lý tổng</option>
         {warehouses.map(w => (
           <option key={w.id} value={`manager_${w.id}`}>
             {w.name} 

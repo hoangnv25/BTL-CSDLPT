@@ -1,0 +1,140 @@
+.pageContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  height: 100%;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.toolbar {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.searchGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: white;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 0 0.75rem;
+  height: 36px;
+  min-width: 280px;
+}
+
+.searchInput {
+  border: none;
+  outline: none;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text-primary);
+  width: 100%;
+  background: transparent;
+}
+
+.card {
+  background: var(--bg-main);
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+}
+
+.tableContainer {
+  width: 100%;
+  overflow-y: auto;
+  max-height: calc(100vh - 220px);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.th {
+  background: var(--bg-main);
+  padding: 0.75rem 1rem;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-color);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.td {
+  padding: 0.75rem 1rem;
+  font-size: 14px;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
+  transition: background-color 0.15s;
+}
+
+.tableRow:hover .td {
+  background-color: var(--surface-hover);
+}
+
+.tableRow:last-child .td {
+  border-bottom: none;
+}
+
+.emptyState {
+  padding: 2.5rem;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.paginationContainer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1rem;
+  padding: 1rem;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-main);
+}
+
+.pageInfo {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-right: auto;
+}
+
+/* Custom styles for Ant Design Pagination to match theme */
+:global(.ant-pagination-item-active) {
+  border-color: var(--primary-color) !important;
+}
+
+:global(.ant-pagination-item-active a) {
+  color: var(--primary-color) !important;
+}
+
+:global(.ant-pagination-item:hover) {
+  border-color: var(--primary-color) !important;
+}
+
+:global(.ant-pagination-item:hover a) {
+  color: var(--primary-color) !important;
+}
+
+:global(.ant-pagination-prev:hover .ant-pagination-item-link),
+:global(.ant-pagination-next:hover .ant-pagination-item-link) {
+  color: var(--primary-color) !important;
+  border-color: var(--primary-color) !important;
+}
