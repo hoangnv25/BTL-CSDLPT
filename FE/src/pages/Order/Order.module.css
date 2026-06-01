@@ -112,11 +112,11 @@
 }
 
 /* Pagination Styles */
-.pagination {
+.paginationContainer {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.5rem;
+  gap: 1rem;
   padding: 1rem;
   border-top: 1px solid var(--border-color);
   background: var(--bg-main);
@@ -126,6 +126,29 @@
   font-size: 13px;
   color: var(--text-secondary);
   margin-right: auto;
+}
+
+/* Custom styles for Ant Design Pagination to match theme */
+:global(.ant-pagination-item-active) {
+  border-color: var(--primary-color) !important;
+}
+
+:global(.ant-pagination-item-active a) {
+  color: var(--primary-color) !important;
+}
+
+:global(.ant-pagination-item:hover) {
+  border-color: var(--primary-color) !important;
+}
+
+:global(.ant-pagination-item:hover a) {
+  color: var(--primary-color) !important;
+}
+
+:global(.ant-pagination-prev:hover .ant-pagination-item-link),
+:global(.ant-pagination-next:hover .ant-pagination-item-link) {
+  color: var(--primary-color) !important;
+  border-color: var(--primary-color) !important;
 }
 
 .pageBtn {
@@ -441,4 +464,18 @@
 .statusPending {
   background-color: #e0f2fe;
   color: #0369a1;
+}
+
+.warningBanner {
+  background-color: #fffbeb;
+  border: 1px solid #fef3c7;
+  color: #b45309;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  margin-bottom: 1.5rem;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  line-height: 1.4;
 }

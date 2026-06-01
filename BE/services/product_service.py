@@ -149,7 +149,7 @@ class ProductService:
 
     def list_products_by_warehouse(self, warehouse_id: int, include_deleted: bool = False) -> list[ProductWithWarehouseStockOut]:
         from BE.repositories.warehouse_repository import WarehouseRepository
-        wh = WarehouseRepository().find_by_id(self._session, warehouse_id)
+        wh = WarehouseRepository.find_by_id(self._session, warehouse_id)
         if not wh:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -195,7 +195,7 @@ class ProductService:
         total_stock = sum(i.stock_quantity for i in invs)
 
         from BE.repositories.warehouse_repository import WarehouseRepository
-        warehouses = {w.id: w.name for w in WarehouseRepository().list_all(self._session)}
+        warehouses = {w.id: w.name for w in WarehouseRepository.list_all(self._session)}
 
         inventory_list = []
         for inv in invs:

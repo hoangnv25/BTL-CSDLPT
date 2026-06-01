@@ -53,8 +53,8 @@ class InventoryService:
 
         combined_rows = []
         futures = {inventory_thread_pool.submit(query_node, node): node for node in self._nodes}
-        # Giới hạn thời gian chờ các Thread tối đa 0.5s để tránh nghẽn DNS của hệ điều hành
-        done, not_done = wait(futures.keys(), timeout=0.5)
+        # Tăng timeout lên 2.0s để tránh nghẽn DNS của hệ điều hành hoặc khi DB chịu tải cao
+        done, not_done = wait(futures.keys(), timeout=2.0)
         
         for f in done:
             node = futures[f]
@@ -66,7 +66,7 @@ class InventoryService:
         for f in not_done:
             node = futures[f]
             circuit_breaker.mark_failure(node)
-            service_log("InventoryService", f"TIMEOUT: Node phụ [{node}] không phản hồi trong 0.5s (kẹt DNS/Kết nối). Đánh dấu OFFLINE.")
+            service_log("InventoryService", f"TIMEOUT: Node phụ [{node}] không phản hồi trong 2.0s (kẹt DNS/Kết nối). Đánh dấu OFFLINE.")
                     
         return combined_rows
 
@@ -150,45 +150,25 @@ class InventoryService:
         return combined_rows
 
     def update_inventory(self, body: InventoryUpdate) -> InventoryOut:
-        service_log("InventoryService", f"Bắt đầu yêu cầu cập nhật tồn kho cho bản ghi ID={body.id}")
+        service_log("InventoryService", f"Bắt đầu yêu cầu cập nhật tồn kho cho bản ghi ID={body.id} tại warehouse_id={body.warehouse_id}")
         
-        target_node = None
-        
-        # 1. Tìm Node chứa bản ghi tồn kho có ID tương ứng (Quét song song để tìm kiếm nhanh nhất)
-        def check_id_on_node(node: str) -> str | None:
-            if not circuit_breaker.is_available(node):
-                return None
-            try:
-                node_session = get_db_node(node)
-                with node_session:
-                    exists = node_session.query(Inventory).filter(Inventory.id == body.id).first()
-                    circuit_breaker.mark_success(node)
-                    if exists:
-                        return node
-            except Exception as e:
-                circuit_breaker.mark_failure(node)
-                service_log("InventoryService", f"CẢNH BÁO: Lỗi kết nối tới Node phụ [{node}] khi tìm ID: {e}")
-            return None
-
-        futures = {inventory_thread_pool.submit(check_id_on_node, node): node for node in self._nodes}
-        done, not_done = wait(futures.keys(), timeout=0.5)
-        
-        for f in done:
-            res = f.result()
-            if res:
-                target_node = res
-                break
-                
-        for f in not_done:
-            node = futures[f]
-            circuit_breaker.mark_failure(node)
-            service_log("InventoryService", f"TIMEOUT: Node phụ [{node}] không tìm thấy ID={body.id} do hết hạn 0.5s. Đánh dấu OFFLINE.")
-            
-        if not target_node:
-            service_log("InventoryService", f"LỖI: Không tìm thấy bản ghi tồn kho với ID={body.id} trên bất kỳ Node phụ nào!")
+        from BE.repositories.warehouse_repository import WarehouseRepository
+        wh = WarehouseRepository().find_by_id(self._session, body.warehouse_id)
+        if not wh:
+            service_log("InventoryService", f"LỖI: Không tìm thấy kho hàng (ID={body.warehouse_id})")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Không tìm thấy bản ghi tồn kho hợp lệ hoặc Node chứa dữ liệu đang OFFLINE."
+                detail="Không tìm thấy kho hàng."
+            )
+            
+        target_node = wh.region.value.lower()
+        service_log("InventoryService", f"Kho '{wh.name}' thuộc region '{wh.region}' -> Định tuyến cập nhật đến Node phụ: [{target_node}]")
+        
+        if not circuit_breaker.is_available(target_node):
+            service_log("InventoryService", f"Circuit Breaker: Node phụ [{target_node}] đang ở trạng thái OFFLINE. Hủy yêu cầu.")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Lỗi kết nối phân mảnh: Node [{target_node}] không hoạt động."
             )
             
         # 2. Thực hiện khóa dòng dữ liệu bi quan (SELECT FOR UPDATE) và cập nhật

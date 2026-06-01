@@ -43,7 +43,7 @@ class NodeCircuitBreaker:
     def __init__(self):
         self._states = {} # {node: {"status": "ONLINE", "last_failure": 0}}
         self._lock = Lock()
-        self.COOLDOWN = 10 # 10 seconds cooldown before retrying a down node
+        self.COOLDOWN = 10 # 10 giây hồi chiêu trước khi thử lại một node đang sập
 
     def is_available(self, node: str) -> bool:
         with self._lock:
@@ -74,18 +74,18 @@ SessionLocals = {}
 
 for site, url in DB_URLS.items():
     if url:
-        # Cấu hình timeout kết nối ngắn (0.5 giây) để tránh treo Backend khi một Node phụ bị sập
+        # Cấu hình timeout kết nối (2.0 giây) để tránh treo Backend khi một Node phụ bị sập
         engines[site] = create_engine(
             url, 
             pool_pre_ping=True,
-            connect_args={"connect_timeout": 0.5}
+            connect_args={"connect_timeout": 2.0}
         )
         SessionLocals[site] = sessionmaker(autocommit=False, autoflush=False, bind=engines[site])
 
-# Default sẽ lấy db trung tâm
+# Mặc định sẽ lấy db trung tâm
 engine = engines.get("main")
 if engine is None:
-    # Fallback to create from DATABASE_URL if MAIN_DB_URL was somehow empty and DATABASE_URL failed
+    # Dự phòng khởi tạo từ DATABASE_URL nếu MAIN_DB_URL rỗng
     engine = create_engine(DATABASE_URL, pool_pre_ping=True)
     SessionLocals["main"] = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -94,7 +94,7 @@ SessionLocal = SessionLocals["main"]
 Base = declarative_base()
 
 def get_db() -> Generator[Session, None, None]:
-    """Get default database session (Main). Used by existing APIs."""
+    """Lấy session DB mặc định (Main). Sử dụng cho các API hiện có."""
     db = SessionLocal()
     try:
         yield db

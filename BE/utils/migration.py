@@ -34,12 +34,21 @@ def migrate_main_inventories_to_shards():
             inventories = main_conn.execute(text("SELECT id, product_id, warehouse_id, stock_quantity, updated_at FROM inventories")).all()
             migration_log(f"Đọc thành công {len(inventories)} bản ghi tồn kho từ main DB.")
             
-            # Đọc danh sách warehouses để xác định region
-            warehouses_raw = main_conn.execute(text("SELECT id, region FROM warehouses")).all()
+            # Đọc danh sách kho hàng từ các Node chi nhánh để xác định region
+            warehouses_raw = []
+            for node in ["north", "central", "south"]:
+                if not circuit_breaker.is_available(node):
+                    continue
+                try:
+                    with engines[node].connect() as node_conn:
+                        whs = node_conn.execute(text("SELECT id, region FROM warehouses")).all()
+                        warehouses_raw.extend(whs)
+                except Exception as e:
+                    migration_log(f"Cảnh báo: Không thể đọc kho hàng từ Node phụ [{node}] khi di trú inventories: {e}")
             warehouse_regions = {w[0]: w[1] for w in warehouses_raw}
-            migration_log(f"Đọc thông tin {len(warehouse_regions)} kho hàng từ main DB để ánh xạ vùng miền.")
+            migration_log(f"Đọc thông tin {len(warehouse_regions)} kho hàng từ các Node chi nhánh để ánh xạ vùng miền.")
         except Exception as e:
-            migration_log(f"LỖI: Không thể đọc dữ liệu tồn kho hoặc kho hàng từ main DB: {e}")
+            migration_log(f"LỖI: Không thể đọc dữ liệu tồn kho từ main DB hoặc kho từ các node: {e}")
             return
 
         # Sắp xếp và chuyển dữ liệu sang các Node phụ tương ứng
@@ -136,14 +145,25 @@ def verify_and_initialize_missing_inventories():
     main_engine = engines["main"]
     
     try:
-        # Lấy danh sách toàn bộ sản phẩm (kể cả sản phẩm bị xóa mềm) và kho hàng từ main DB
+        # Lấy danh sách toàn bộ sản phẩm (kể cả sản phẩm bị xóa mềm) từ main DB
         with main_engine.connect() as main_conn:
             products = main_conn.execute(text("SELECT id, name, category_id, price, deleted_at FROM products")).all()
-            warehouses = main_conn.execute(text("SELECT id, name, region FROM warehouses")).all()
             
-        migration_log(f"Tìm thấy {len(products)} sản phẩm và {len(warehouses)} kho hàng trên main DB để đối chiếu.")
+        # Lấy danh sách kho hàng bằng cách gộp từ các Node phụ
+        warehouses = []
+        for node in ["north", "central", "south"]:
+            if not circuit_breaker.is_available(node):
+                continue
+            try:
+                with engines[node].connect() as node_conn:
+                    whs = node_conn.execute(text("SELECT id, name, region FROM warehouses")).all()
+                    warehouses.extend(whs)
+            except Exception as e:
+                migration_log(f"Cảnh báo: Không thể đọc kho hàng từ Node phụ [{node}] để bù đắp: {e}")
+            
+        migration_log(f"Tìm thấy {len(products)} sản phẩm trên main DB và {len(warehouses)} kho hàng gộp từ các Node phụ để đối chiếu.")
     except Exception as e:
-        migration_log(f"LỖI: Không thể đọc danh sách sản phẩm hoặc kho hàng từ main DB: {e}")
+        migration_log(f"LỖI: Không thể đọc danh sách sản phẩm từ main DB hoặc kho hàng từ các node: {e}")
         return
 
     # Gom nhóm các kho hàng theo node phân mảnh tương ứng
@@ -289,11 +309,20 @@ def migrate_main_packages_to_shards():
                 package_details = main_conn.execute(text("SELECT id, package_id, product_id, quantity FROM package_details")).all()
                 migration_log(f"Đọc thành công {len(package_details)} chi tiết kiện hàng từ main DB.")
 
-            # Đọc danh sách kho hàng để định tuyến
-            warehouses_raw = main_conn.execute(text("SELECT id, region FROM warehouses")).all()
+            # Đọc danh sách kho hàng từ các Node chi nhánh để định tuyến
+            warehouses_raw = []
+            for node in ["north", "central", "south"]:
+                if not circuit_breaker.is_available(node):
+                    continue
+                try:
+                    with engines[node].connect() as node_conn:
+                        whs = node_conn.execute(text("SELECT id, region FROM warehouses")).all()
+                        warehouses_raw.extend(whs)
+                except Exception as e:
+                    migration_log(f"Cảnh báo: Không thể đọc kho hàng từ Node phụ [{node}] khi di trú packages: {e}")
             warehouse_regions = {w[0]: w[1] for w in warehouses_raw}
         except Exception as e:
-            migration_log(f"LỖI: Không thể đọc dữ liệu kiện hàng từ main DB: {e}")
+            migration_log(f"LỖI: Không thể đọc dữ liệu kiện hàng từ main DB hoặc kho từ các node: {e}")
             return
 
         # Phân loại kiện hàng và chi tiết kiện hàng theo Node
@@ -440,4 +469,143 @@ def migrate_main_packages_to_shards():
                 migration_log("Đã DROP bảng 'packages' và 'package_details' trên main DB thành công. Hoàn tất quá trình di trú.")
             except Exception as e:
                 migration_log(f"CẢNH BÁO: Không thể DROP bảng packages/package_details trên main DB: {e}")
+
+
+def migrate_warehouses_to_shards():
+    """Di trú dữ liệu bảng warehouses từ Main DB sang các phân mảnh ngang nguyên thủy ở Node phụ"""
+    from BE.database import engines, get_db_node
+    from BE.models.warehouse import Warehouse, RegionEnum
+    from sqlalchemy import text, inspect
+    
+    migration_log("Bắt đầu kiểm tra di trú dữ liệu bảng warehouses từ Main DB...")
+    
+    main_engine = engines.get("main")
+    if not main_engine:
+        migration_log("Không tìm thấy kết nối đến main DB. Hủy di trú.")
+        return
+        
+    with main_engine.connect() as main_conn:
+        # Kiểm tra xem bảng warehouses vật lý ở Main DB có tồn tại và có dữ liệu không
+        try:
+            inspector = inspect(main_engine)
+            if "warehouses" not in inspector.get_table_names():
+                migration_log("Bảng warehouses vật lý không tồn tại ở Main DB (có thể đã được di trú trước đó).")
+                return
+            
+            warehouses_raw = main_conn.execute(text("SELECT id, name, region, address FROM warehouses")).all()
+            if not warehouses_raw:
+                # Xóa bảng trống ở Main DB để tránh nhầm lẫn
+                migration_log("Bảng warehouses ở Main DB rỗng. Đang xóa bảng vật lý tại Main DB...")
+                main_conn.execute(text("DROP TABLE IF EXISTS warehouses;"))
+                return
+        except Exception as e:
+            migration_log(f"Lỗi kiểm tra bảng warehouses ở Main DB: {e}")
+            return
+            
+    migration_log(f"Bắt đầu di trú {len(warehouses_raw)} kho hàng sang các Node phụ tương ứng...")
+    
+    # Đẩy dữ liệu về các Node phụ
+    for wh in warehouses_raw:
+        wh_id, name, region, address = wh
+        node_key = None
+        if "North" in str(region):
+            node_key = "north"
+        elif "Central" in str(region):
+            node_key = "central"
+        elif "South" in str(region):
+            node_key = "south"
+            
+        if not node_key:
+            migration_log(f"CẢNH BÁO: Region '{region}' không xác định cho kho {wh_id}. Bỏ qua.")
+            continue
+            
+        node_session = get_db_node(node_key)
+        try:
+            # Kiểm tra xem kho đã tồn tại ở node phụ chưa
+            exists = node_session.query(Warehouse).filter(Warehouse.id == wh_id).first()
+            if not exists:
+                enum_val = None
+                if node_key == "north":
+                    enum_val = RegionEnum.North
+                elif node_key == "central":
+                    enum_val = RegionEnum.Central
+                elif node_key == "south":
+                    enum_val = RegionEnum.South
+                    
+                new_wh = Warehouse(id=wh_id, name=name, region=enum_val, address=address)
+                node_session.add(new_wh)
+                node_session.commit()
+                migration_log(f"Đã di trú Kho ID {wh_id} ({name}) -> Node: [{node_key}]")
+        except Exception as e:
+            migration_log(f"Lỗi di trú kho hàng {wh_id}: {e}")
+            node_session.rollback()
+        finally:
+            node_session.close()
+            
+    # Xóa bảng vật lý warehouses ở Main DB để hoàn tất phân tán nguyên thủy
+    migration_log("Hoàn tất di trú dữ liệu kho hàng. Đang dọn dẹp bảng 'warehouses' vật lý trên Main DB...")
+    with main_engine.begin() as conn:
+        try:
+            conn.execute(text("SET FOREIGN_KEY_CHECKS = 0;"))
+            conn.execute(text("DROP TABLE IF EXISTS warehouses;"))
+            conn.execute(text("SET FOREIGN_KEY_CHECKS = 1;"))
+            migration_log("Hoàn tất di trú bảng warehouses. Bảng vật lý ở Main DB đã được dọn dẹp.")
+        except Exception as e:
+            migration_log(f"CẢNH BÁO: Không thể DROP bảng warehouses trên Main DB: {e}")
+
+
+def setup_node_foreign_keys(site_name: str, db_engine):
+    """Thiết lập khóa ngoại vật lý fk_inventories_warehouses và fk_packages_warehouses trên Node phụ"""
+    migration_log(f"Đang kiểm tra/thiết lập khóa ngoại vật lý cho Node: [{site_name}]...")
+    with db_engine.begin() as conn:
+        # 1. Khóa ngoại cho inventories
+        try:
+            exists = conn.execute(text("""
+                SELECT 1 FROM information_schema.table_constraints 
+                WHERE constraint_schema = DATABASE() 
+                  AND table_name = 'inventories' 
+                  AND constraint_name = 'fk_inventories_warehouses'
+            """)).first()
+            if not exists:
+                conn.execute(text("SET FOREIGN_KEY_CHECKS = 0;"))
+                conn.execute(text("""
+                    ALTER TABLE inventories 
+                    ADD CONSTRAINT fk_inventories_warehouses 
+                    FOREIGN KEY (warehouse_id) REFERENCES warehouses(id)
+                    ON DELETE RESTRICT ON UPDATE CASCADE;
+                """))
+                conn.execute(text("SET FOREIGN_KEY_CHECKS = 1;"))
+                migration_log(f"Đã tạo khóa ngoại fk_inventories_warehouses trên Node: [{site_name}]")
+        except Exception as e:
+            migration_log(f"CẢNH BÁO: Lỗi tạo khóa ngoại inventories trên Node [{site_name}]: {e}")
+            try:
+                conn.execute(text("SET FOREIGN_KEY_CHECKS = 1;"))
+            except:
+                pass
+
+        # 2. Khóa ngoại cho packages
+        try:
+            exists = conn.execute(text("""
+                SELECT 1 FROM information_schema.table_constraints 
+                WHERE constraint_schema = DATABASE() 
+                  AND table_name = 'packages' 
+                  AND constraint_name = 'fk_packages_warehouses'
+            """)).first()
+            if not exists:
+                conn.execute(text("SET FOREIGN_KEY_CHECKS = 0;"))
+                conn.execute(text("""
+                    ALTER TABLE packages 
+                    ADD CONSTRAINT fk_packages_warehouses 
+                    FOREIGN KEY (warehouse_id) REFERENCES warehouses(id)
+                    ON DELETE RESTRICT ON UPDATE CASCADE;
+                """))
+                conn.execute(text("SET FOREIGN_KEY_CHECKS = 1;"))
+                migration_log(f"Đã tạo khóa ngoại fk_packages_warehouses trên Node: [{site_name}]")
+        except Exception as e:
+            migration_log(f"CẢNH BÁO: Lỗi tạo khóa ngoại packages trên Node [{site_name}]: {e}")
+            try:
+                conn.execute(text("SET FOREIGN_KEY_CHECKS = 1;"))
+            except:
+                pass
+
 

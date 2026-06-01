@@ -73,8 +73,39 @@ class PackageService:
             if not row:
                 raise HTTPException(status_code=404, detail="Không tìm thấy kiện hàng trên Node phụ")
                 
-            old_status = row.status.value
-            row.status = request.status
+            old_status = row.status
+            new_status = request.status
+            row.status = new_status
+            
+            # Nếu trạng thái chuyển sang Delivered, cập nhật thống kê bán hàng tại Node địa phương
+            if new_status == PackageStatusEnum.Delivered and old_status != PackageStatusEnum.Delivered:
+                # Dùng ngày hiện tại làm ngày giao hàng cho thống kê (packages không còn cột delivered_at)
+                delivery_date = date.today()
+                
+                from BE.services.stats_service import StatsService
+                from BE.models.product import Product
+                # Lấy chi tiết kiện hàng để biết sản phẩm và số lượng
+                details = node_session.query(PackageDetail).filter(PackageDetail.package_id == package_id).all()
+                for i, d in enumerate(details):
+                    # Truy cập bảng Product local (vì đã được replicated) để lấy giá tại thời điểm giao hàng
+                    product = node_session.query(Product).filter(Product.id == d.product_id).first()
+                    price = float(product.price) if product else 0.0
+                    revenue = price * d.quantity
+                    
+                    # Chỉ cộng dồn package_count=1 cho sản phẩm đầu tiên trong kiện hàng
+                    pkg_count = 1 if i == 0 else 0
+                    
+                    StatsService.update_stats(
+                        node_session, 
+                        d.product_id, 
+                        row.warehouse_id, 
+                        d.quantity, 
+                        revenue,
+                        package_count=pkg_count,
+                        delivered_at=delivery_date
+                    )
+                package_service_log(f"Đã cập nhật thống kê doanh số và số lượng kiện hàng cho ID={package_id}")
+
             node_session.commit()
             
             package_service_log(f"Cập nhật trạng thái thành công trên Node [{target_node}]: {old_status} -> {request.status.value}")
@@ -98,8 +129,8 @@ class PackageService:
         # 1. Xác định các Node phụ cần truy vấn
         target_nodes = []
         if warehouse_id is not None:
-            from BE.models.warehouse import Warehouse
-            wh = session.query(Warehouse).filter(Warehouse.id == warehouse_id).first()
+            from BE.repositories.warehouse_repository import WarehouseRepository
+            wh = WarehouseRepository.find_by_id(session, warehouse_id)
             if not wh:
                 package_service_log(f"LỖI: Không tìm thấy kho hàng ID={warehouse_id}")
                 raise HTTPException(status_code=404, detail="Không tìm thấy kho hàng")
@@ -122,24 +153,30 @@ class PackageService:
                         query = query.filter(Package.warehouse_id == warehouse_id)
                     packages = query.all()
                     
+                    # Tối ưu: Lấy toàn bộ chi tiết kiện hàng trong một lần query (tránh N+1)
+                    package_ids = [p.id for p in packages]
+                    all_details = []
+                    if package_ids:
+                        all_details = node_session.query(PackageDetail).filter(PackageDetail.package_id.in_(package_ids)).all()
+                    
+                    details_map = {}
+                    for d in all_details:
+                        details_map.setdefault(d.package_id, []).append({
+                            "id": d.id,
+                            "package_id": d.package_id,
+                            "product_id": d.product_id,
+                            "quantity": d.quantity
+                        })
+
                     result_list = []
                     for p in packages:
-                        details_list = []
-                        node_details = node_session.query(PackageDetail).filter(PackageDetail.package_id == p.id).all()
-                        for d in node_details:
-                            details_list.append({
-                                "id": d.id,
-                                "package_id": d.package_id,
-                                "product_id": d.product_id,
-                                "quantity": d.quantity
-                            })
                         result_list.append({
                             "id": p.id,
                             "order_id": p.order_id,
                             "warehouse_id": p.warehouse_id,
                             "status": p.status,
                             "created_at": p.created_at,
-                            "details": details_list
+                            "details": details_map.get(p.id, [])
                         })
                     circuit_breaker.mark_success(node)
                     return result_list
@@ -150,7 +187,8 @@ class PackageService:
 
         combined_packages = []
         futures = {inventory_thread_pool.submit(query_packages_on_node, node): node for node in target_nodes}
-        done, not_done = wait(futures.keys(), timeout=0.5)
+        # Tăng timeout lên 2.0s để đảm bảo các truy vấn phức tạp kịp hoàn tất
+        done, not_done = wait(futures.keys(), timeout=2.0)
 
         for f in done:
             node = futures[f]
@@ -171,7 +209,7 @@ class PackageService:
         # 3. Lấy thông tin chi tiết từ Main DB
         from BE.models.order import Order
         from BE.models.user import User
-        from BE.models.warehouse import Warehouse
+        from BE.repositories.warehouse_repository import WarehouseRepository
         from BE.models.product import Product
         from BE.models.category import Category
         from BE.schemas.warehouse import WarehouseOut
@@ -199,7 +237,7 @@ class PackageService:
                 ordered_at=o.ordered_at
             )
 
-        warehouses = session.query(Warehouse).filter(Warehouse.id.in_(warehouse_ids)).all() if warehouse_ids else []
+        warehouses = WarehouseRepository.list_by_ids(session, warehouse_ids) if warehouse_ids else []
         warehouses_by_id = {w.id: WarehouseOut(id=w.id, name=w.name, region=w.region, address=w.address) for w in warehouses}
 
         products = session.query(Product).filter(Product.id.in_(product_ids)).all() if product_ids else []

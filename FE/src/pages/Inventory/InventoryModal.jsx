@@ -37,6 +37,7 @@ export default function InventoryModal({ isOpen, onClose, initialData, onSuccess
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           id: initialData.id,
+          warehouse_id: initialData.warehouse_id,
           stock_quantity: parseInt(stockQuantity)
         }),
       });

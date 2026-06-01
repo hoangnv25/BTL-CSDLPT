@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, PencilSimple, Trash, ArrowsClockwise } from '@phosphor-icons/react';
-import { message } from 'antd';
+import { message, Pagination } from 'antd';
 import styles from './Category.module.css';
 import CategoryModal from './CategoryModal';
 
@@ -125,33 +125,17 @@ export default function Category() {
 
   const renderPagination = () => {
     return (
-      <div className={styles.pagination}>
+      <div className={styles.paginationContainer}>
         <span className={styles.pageInfo}>
           Hiển thị {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, categories.length)} trong tổng số {categories.length} bản ghi
         </span>
-        <button
-          className={styles.pageBtn}
-          onClick={handlePrevPage}
-          disabled={currentPage === 1}
-        >
-          Trước
-        </button>
-        {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-          <button
-            key={page}
-            className={`${styles.pageBtn} ${currentPage === page ? styles.pageBtnActive : ''}`}
-            onClick={() => setCurrentPage(page)}
-          >
-            {page}
-          </button>
-        ))}
-        <button
-          className={styles.pageBtn}
-          onClick={handleNextPage}
-          disabled={currentPage === totalPages}
-        >
-          Sau
-        </button>
+        <Pagination
+          current={currentPage}
+          total={categories.length}
+          pageSize={ITEMS_PER_PAGE}
+          onChange={(page) => setCurrentPage(page)}
+          showSizeChanger={false}
+        />
       </div>
     );
   };

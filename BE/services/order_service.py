@@ -90,8 +90,8 @@ class OrderService:
         service_log("OrderService", "Bắt đầu mở các kết nối/transaction đến các Node phụ...")
         
         # 1. Truy vấn các warehouses từ main DB để biết phân vùng miền (Region) của từng warehouse
-        from BE.models.warehouse import Warehouse
-        warehouses_list = self._session.query(Warehouse).all()
+        from BE.repositories.warehouse_repository import WarehouseRepository
+        warehouses_list = WarehouseRepository.list_all(self._session)
         warehouse_regions = {w.id: w.region.value.lower() for w in warehouses_list}
         
         from BE.database import get_db_node, circuit_breaker
@@ -377,6 +377,8 @@ class OrderService:
         service_log("OrderService", f"Ánh xạ chỉ ra các Node chứa kiện hàng của đơn hàng: {target_nodes}")
 
         packages_data = []
+        failed_nodes = []
+        is_partial = False
         
         # Nếu chưa có ánh xạ nào (có thể là đơn hàng cũ trước khi sharding), thực hiện quét trên cả 3 Node
         if not target_nodes:
@@ -388,6 +390,8 @@ class OrderService:
         for node in target_nodes:
             if not circuit_breaker.is_available(node):
                 service_log("OrderService", f"Circuit Breaker: Bỏ qua Node [{node}] đang ngoại tuyến.")
+                is_partial = True
+                failed_nodes.append(node)
                 continue
             try:
                 node_session = get_db_node(node)
@@ -408,19 +412,23 @@ class OrderService:
                             "status": p.status,
                             "items": details_list
                         })
+                circuit_breaker.mark_success(node)
                 service_log("OrderService", f" -> Lấy thành công {len(node_pkgs)} kiện hàng từ Node phụ [{node}]")
             except Exception as e:
                 service_log("OrderService", f"CẢNH BÁO: Lỗi đọc kiện hàng trên Node [{node}]: {e}")
+                circuit_breaker.mark_failure(node)
+                is_partial = True
+                failed_nodes.append(node)
 
         # 3. Lấy thông tin phụ trợ (Warehouses, Products, Categories) từ Main DB
-        from BE.models.warehouse import Warehouse
+        from BE.repositories.warehouse_repository import WarehouseRepository
         from BE.models.category import Category
         from BE.schemas.warehouse import WarehouseOut
         from BE.schemas.product import ProductOut
 
         warehouse_ids = {p["warehouse_id"] for p in packages_data}
         warehouses = {w.id: WarehouseOut(id=w.id, name=w.name, region=w.region, address=w.address) 
-                      for w in self._session.query(Warehouse).filter(Warehouse.id.in_(warehouse_ids)).all()} if warehouse_ids else {}
+                      for w in WarehouseRepository.list_by_ids(self._session, list(warehouse_ids))} if warehouse_ids else {}
 
         product_ids = {item["product_id"] for p in packages_data for item in p["items"]}
         products = self._session.query(Product).filter(Product.id.in_(product_ids)).all() if product_ids else []
@@ -449,6 +457,12 @@ class OrderService:
                     )
                 )
 
+        warning_msg = None
+        if is_partial and failed_nodes:
+            region_map = {"north": "Miền Bắc", "central": "Miền Trung", "south": "Miền Nam"}
+            friendly_nodes = [region_map.get(n, n) for n in failed_nodes]
+            warning_msg = f"Hệ thống tạm thời không thể kết nối tới các Chi nhánh: {', '.join(friendly_nodes)}. Một số thông tin kiện hàng có thể không đầy đủ."
+
         return OrderOut(
             order_id=order.id,
             user=user_out,
@@ -456,6 +470,8 @@ class OrderService:
             total_amount=order.total_amount,
             ordered_at=order.ordered_at,
             packages=packages_out_list,
+            is_partial=is_partial,
+            warning_message=warning_msg
         )
 
 

@@ -17,7 +17,9 @@ class Package(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     order_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    warehouse_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    warehouse_id: Mapped[int] = mapped_column(
+        ForeignKey("warehouses.id"), nullable=False
+    )
     status: Mapped[PackageStatusEnum] = mapped_column(
         Enum(PackageStatusEnum, name="package_status_enum"),
         nullable=False,
