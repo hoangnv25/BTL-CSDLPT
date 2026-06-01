@@ -154,7 +154,6 @@ function App() {
           currentOption={currentOption}
           onOptionChange={setCurrentOption}
         />
-
         <main style={{ flex: 1, overflowY: 'auto', padding: '2rem', position: 'relative' }}>
           {renderContent()}
 
@@ -162,7 +161,7 @@ function App() {
           {currentOption === 'admin' && <NotificationBell />}
         </main>
       </div>
-      );
+    </ConfigProvider>
+  );
 }
-
-      export default App;
+export default App;
