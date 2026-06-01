@@ -48,15 +48,25 @@ class ReplicationWorker:
 
             for log in logs:
                 success = self._sync_log(log)
+                node = log.target_node
+                action = log.action
+                table_name = log.table_name
+
                 if success:
                     log.status = "SUCCESS"
+                    # Nếu là sync stats thành công sau khi fail, bắn tin mừng
+                    if action == "SYNC_STATS":
+                        asyncio.run_coroutine_threadsafe(manager.broadcast({
+                            "type": "SYNC_SUCCESS",
+                            "node": node,
+                            "action": action,
+                            "table": table_name,
+                            "message": f"Đã đồng bộ bù thành công dữ liệu cho Node {node}!"
+                        }), loop)
                 else:
                     log.retry_count += 1
                     log.status = "FAILED"
                     # Lưu trữ dữ liệu ra các biến trước khi session bị đóng để tránh lỗi DetachedInstanceError
-                    node = log.target_node
-                    action = log.action
-                    table_name = log.table_name
                     retry_count = log.retry_count
                     # Gửi thông báo đến FE từ luồng phụ (Worker) về luồng chính (Main Event Loop)
                     asyncio.run_coroutine_threadsafe(self._notify_fe(node, action, table_name, retry_count), loop)
@@ -92,8 +102,19 @@ class ReplicationWorker:
 
     def _sync_log(self, log: ReplicationLog) -> bool:
         if not circuit_breaker.is_available(log.target_node):
-            print(f"Circuit Breaker: Bỏ qua sync log {log.id} cho Node [{log.target_node}] do đang OFFLINE.")
+            print(f"Circuit Breaker: Bỏ qua sync log {log.id} for Node [{log.target_node}] do đang OFFLINE.")
             return False
+        
+        # Xử lý riêng cho hành động SYNC_STATS
+        if log.action == "SYNC_STATS":
+            try:
+                from BE.services.stats_service import StatsService
+                print(f"ReplicationWorker: Đang đồng bộ bù Stats cho Node [{log.target_node}]...")
+                StatsService.sync_node_stats(log.target_node)
+                return True
+            except Exception as e:
+                print(f"ReplicationWorker: Lỗi sync bù Stats cho [{log.target_node}]: {e}")
+                return False
             
         try:
             node_session = get_db_node(log.target_node)

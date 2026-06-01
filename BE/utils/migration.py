@@ -607,5 +607,3 @@ def setup_node_foreign_keys(site_name: str, db_engine):
                 conn.execute(text("SET FOREIGN_KEY_CHECKS = 1;"))
             except:
                 pass
-
-

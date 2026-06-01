@@ -50,10 +50,14 @@ class NodeCircuitBreaker:
             state = self._states.setdefault(node, {"status": "ONLINE", "last_failure": 0})
             if state["status"] == "OFFLINE":
                 if time.time() - state["last_failure"] > self.COOLDOWN:
-                    state["status"] = "ONLINE"
                     return True
                 return False
             return True
+
+    def is_online(self, node: str) -> bool:
+        with self._lock:
+            state = self._states.setdefault(node, {"status": "ONLINE", "last_failure": 0})
+            return state["status"] == "ONLINE"
 
     def mark_failure(self, node: str):
         with self._lock:

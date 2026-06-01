@@ -13,14 +13,13 @@ class WarehouseRepository:
 
     @staticmethod
     def list_all(session: Session) -> list[Warehouse]:
-        # Kiểm tra xem session hiện tại có phải là Main DB hay không
         is_main = (session.bind == engines.get("main"))
         
         if is_main:
             # Thu thập song song/tuần tự dữ liệu từ cả 3 node nhánh (Scatter-Gather)
             all_warehouses = []
             for node in ["north", "central", "south"]:
-                if not circuit_breaker.is_available(node):
+                if not circuit_breaker.is_online(node):
                     continue
                 try:
                     temp_session = get_db_node(node)

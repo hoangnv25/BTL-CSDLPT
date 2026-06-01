@@ -10,7 +10,7 @@ class ReplicationLog(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     table_name: Mapped[str] = mapped_column(String(50), nullable=False)
     record_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    action: Mapped[str] = mapped_column(String(20), nullable=False)  # Các hành động: INSERT, UPDATE, DELETE
+    action: Mapped[str] = mapped_column(String(20), nullable=False)  # Các hành động: INSERT, UPDATE, DELETE, SYNC_STATS
     data_payload: Mapped[str | None] = mapped_column(Text, nullable=True) # Nội dung dữ liệu định dạng JSON
     target_node: Mapped[str] = mapped_column(String(50), nullable=False) # Node đích: north, central, south
     status: Mapped[str] = mapped_column(String(20), default="PENDING") # Trạng thái: PENDING, SUCCESS, FAILED

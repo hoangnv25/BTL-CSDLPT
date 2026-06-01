@@ -77,34 +77,9 @@ class PackageService:
             new_status = request.status
             row.status = new_status
             
-            # Nếu trạng thái chuyển sang Delivered, cập nhật thống kê bán hàng tại Node địa phương
+            # Nếu trạng thái chuyển sang Delivered, việc tổng hợp báo cáo sẽ được thực hiện định kỳ ở DB trung tâm
             if new_status == PackageStatusEnum.Delivered and old_status != PackageStatusEnum.Delivered:
-                # Dùng ngày hiện tại làm ngày giao hàng cho thống kê (packages không còn cột delivered_at)
-                delivery_date = date.today()
-                
-                from BE.services.stats_service import StatsService
-                from BE.models.product import Product
-                # Lấy chi tiết kiện hàng để biết sản phẩm và số lượng
-                details = node_session.query(PackageDetail).filter(PackageDetail.package_id == package_id).all()
-                for i, d in enumerate(details):
-                    # Truy cập bảng Product local (vì đã được replicated) để lấy giá tại thời điểm giao hàng
-                    product = node_session.query(Product).filter(Product.id == d.product_id).first()
-                    price = float(product.price) if product else 0.0
-                    revenue = price * d.quantity
-                    
-                    # Chỉ cộng dồn package_count=1 cho sản phẩm đầu tiên trong kiện hàng
-                    pkg_count = 1 if i == 0 else 0
-                    
-                    StatsService.update_stats(
-                        node_session, 
-                        d.product_id, 
-                        row.warehouse_id, 
-                        d.quantity, 
-                        revenue,
-                        package_count=pkg_count,
-                        delivered_at=delivery_date
-                    )
-                package_service_log(f"Đã cập nhật thống kê doanh số và số lượng kiện hàng cho ID={package_id}")
+                package_service_log(f"Kiện hàng ID={package_id} đã được giao. Dữ liệu sẽ được tổng hợp về DB tập trung định kỳ.")
 
             node_session.commit()
             
