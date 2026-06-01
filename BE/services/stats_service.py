@@ -6,8 +6,9 @@ from sqlalchemy.orm import Session
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from BE.database import get_db_node, circuit_breaker
-from BE.models.stats import PackageSalesStat
+from BE.models.stats import ProductSalesStat, WarehousePerformanceStat
 from BE.models.product import Product
+from BE.models.replication_log import ReplicationLog
 from BE.repositories.warehouse_repository import WarehouseRepository
 
 logger = logging.getLogger("app")
@@ -20,39 +21,6 @@ def stats_log(content: str):
 
 class StatsService:
     @staticmethod
-    def update_stats(node_session: Session, product_id: int, warehouse_id: int, quantity: int, revenue: float, package_count: int = 0, delivered_at: date = None):
-        """Cập nhật thống kê bán hàng và số lượng kiện hàng (Upsert)"""
-        if not delivered_at:
-            delivered_at = date.today()
-        
-        try:
-            # Sử dụng ON DUPLICATE KEY UPDATE của MySQL
-            stmt = text("""
-                INSERT INTO package_sales_stats (product_id, warehouse_id, delivered_at, quantity, revenue, package_count)
-                VALUES (:product_id, :warehouse_id, :delivered_at, :quantity, :revenue, :package_count)
-                ON DUPLICATE KEY UPDATE 
-                    quantity = quantity + VALUES(quantity),
-                    revenue = revenue + VALUES(revenue),
-                    package_count = package_count + VALUES(package_count)
-            """)
-            node_session.execute(stmt, {
-                "product_id": product_id,
-                "warehouse_id": warehouse_id,
-                "delivered_at": delivered_at,
-                "quantity": quantity,
-                "revenue": revenue,
-                "package_count": package_count
-            })
-        except Exception as e:
-            stats_log(f"LỖI khi cập nhật stats cho SP ID={product_id}: {e}")
-            raise e
-
-    @staticmethod
-    def update_product_sales(node_session: Session, product_id: int, warehouse_id: int, quantity: int, revenue: float, delivered_at: date = None):
-        """Hàm cũ để tương thích với các phần chưa cập nhật"""
-        return StatsService.update_stats(node_session, product_id, warehouse_id, quantity, revenue, 0, delivered_at)
-
-    @staticmethod
     def get_top_products(
         period: str = "day", 
         warehouse_id: Optional[int] = None,
@@ -61,16 +29,12 @@ class StatsService:
         specific_year: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """
-        Lấy top sản phẩm bán chạy.
-        specific_date: YYYY-MM-DD
-        specific_month: 1-12 (phải đi kèm specific_year)
-        specific_year: YYYY
+        Lấy top sản phẩm bán chạy TỪ DATABASE TẬP TRUNG.
         """
         today = date.today()
         start_date = today
         end_date = today
 
-        # 1. Xác định khoảng thời gian dựa trên các tham số cụ thể hoặc period
         if specific_date:
             start_date = specific_date
             end_date = specific_date
@@ -87,12 +51,8 @@ class StatsService:
             start_date = date(specific_year, 1, 1)
             end_date = date(specific_year, 12, 31)
         else:
-            # Fallback về period mặc định (từ X ngày trước đến nay)
             end_date = today
-            if period == "week":
-                start_date = today - timedelta(days=7)
-            elif period == "month":
-                # Lấy từ đầu tháng đến cuối tháng của tháng hiện tại
+            if period == "month":
                 start_date = today.replace(day=1)
                 if today.month == 12:
                     end_date = date(today.year, 12, 31)
@@ -104,60 +64,32 @@ class StatsService:
             else: # day
                 start_date = today
         
-        # Xác định Node cần truy vấn
         from BE.database import SessionLocal
-        nodes_to_query = ["north", "central", "south"]
-        
-        if warehouse_id:
-            main_db = SessionLocal()
-            wh = WarehouseRepository.find_by_id(main_db, warehouse_id)
-            if wh:
-                nodes_to_query = [wh.region.value.lower()]
-            main_db.close()
-
-        all_node_stats = []
-
-        def query_node(node_key: str):
-            if not circuit_breaker.is_available(node_key):
-                return []
-            try:
-                node_session = get_db_node(node_key)
-                with node_session:
-                    query = node_session.query(
-                        PackageSalesStat.product_id,
-                        func.sum(PackageSalesStat.quantity).label("total_qty")
-                    ).filter(PackageSalesStat.delivered_at >= start_date)\
-                     .filter(PackageSalesStat.delivered_at <= end_date)
-                    
-                    if warehouse_id:
-                        query = query.filter(PackageSalesStat.warehouse_id == warehouse_id)
-                        
-                    results = query.group_by(PackageSalesStat.product_id).all()
-                    return [{"product_id": r[0], "quantity": int(r[1])} for r in results]
-            except Exception as e:
-                stats_log(f"CẢNH BÁO: Lỗi truy vấn stats từ Node [{node_key}]: {e}")
-                return []
-
-        with ThreadPoolExecutor(max_workers=3) as executor:
-            future_to_node = {executor.submit(query_node, node): node for node in nodes_to_query}
-            for future in as_completed(future_to_node):
-                all_node_stats.extend(future.result())
-
-        # Merge
-        aggregated = {}
-        for item in all_node_stats:
-            pid = item["product_id"]
-            aggregated[pid] = aggregated.get(pid, 0) + item["quantity"]
-
-        sorted_pids = sorted(aggregated.items(), key=lambda x: x[1], reverse=True)[:10]
-        
-        if not sorted_pids:
-            return []
-
-        final_results = []
         main_db = SessionLocal()
+        
         try:
-            for pid, qty in sorted_pids:
+            query = main_db.query(
+                ProductSalesStat.product_id,
+                func.sum(ProductSalesStat.quantity).label("total_qty")
+            ).filter(ProductSalesStat.delivered_at >= start_date)\
+             .filter(ProductSalesStat.delivered_at <= end_date)
+            
+            if warehouse_id:
+                query = query.filter(ProductSalesStat.warehouse_id == warehouse_id)
+                
+            results = query.group_by(ProductSalesStat.product_id)\
+                          .order_by(text("total_qty DESC"))\
+                          .limit(10).all()
+
+            stats_log(f"Lấy Top Products: Start={start_date}, End={end_date}, Warehouse={warehouse_id or 'All'} -> Tìm thấy {len(results)} sản phẩm")
+
+            if not results:
+                return []
+
+            final_results = []
+            for r in results:
+                pid = r[0]
+                qty = int(r[1])
                 product = main_db.query(Product).filter(Product.id == pid).first()
                 if product:
                     final_results.append({
@@ -166,10 +98,9 @@ class StatsService:
                         "price": float(product.price),
                         "total_sold": qty
                     })
+            return final_results
         finally:
             main_db.close()
-
-        return final_results
 
     @staticmethod
     def get_revenue_stats(
@@ -180,7 +111,7 @@ class StatsService:
         specific_year: Optional[int] = None
     ) -> Dict[str, Any]:
         """
-        Tính toán doanh thu.
+        Tính toán doanh thu TỪ DATABASE TẬP TRUNG.
         """
         today = date.today()
         start_date = today
@@ -203,9 +134,7 @@ class StatsService:
             end_date = date(specific_year, 12, 31)
         else:
             end_date = today
-            if period == "week":
-                start_date = today - timedelta(days=7)
-            elif period == "month":
+            if period == "month":
                 start_date = today.replace(day=1)
                 if today.month == 12:
                     end_date = date(today.year, 12, 31)
@@ -221,54 +150,20 @@ class StatsService:
         main_db = SessionLocal()
         
         try:
-            nodes_to_query = ["north", "central", "south"]
+            query = main_db.query(
+                func.sum(WarehousePerformanceStat.total_revenue).label("rev"),
+                func.sum(WarehousePerformanceStat.package_count).label("pkgs")
+            ).filter(WarehousePerformanceStat.delivered_at >= start_date)\
+             .filter(WarehousePerformanceStat.delivered_at <= end_date)
+            
             if warehouse_id:
-                wh = WarehouseRepository.find_by_id(main_db, warehouse_id)
-                if not wh:
-                    return {"error": "Warehouse not found"}
-                nodes_to_query = [wh.region.value.lower()]
+                query = query.filter(WarehousePerformanceStat.warehouse_id == warehouse_id)
+            
+            res = query.first()
+            total_revenue = float(res.rev or 0.0)
+            total_packages = int(res.pkgs or 0)
 
-            total_revenue = 0.0
-            total_packages = 0
-
-            def query_revenue_node(node_key: str):
-                if not circuit_breaker.is_available(node_key):
-                    return 0.0, 0
-                
-                rev = 0.0
-                pkg_count = 0
-                
-                try:
-                    node_session = get_db_node(node_key)
-                    with node_session:
-                        # Tính doanh thu và tổng kiện hàng trực tiếp từ bảng stats tập hợp
-                        try:
-                            query_stats = node_session.query(
-                                func.sum(PackageSalesStat.revenue).label("rev"),
-                                func.sum(PackageSalesStat.package_count).label("pkgs")
-                            ).filter(PackageSalesStat.delivered_at >= start_date)\
-                             .filter(PackageSalesStat.delivered_at <= end_date)
-                            
-                            if warehouse_id:
-                                query_stats = query_stats.filter(PackageSalesStat.warehouse_id == warehouse_id)
-                            
-                            res = query_stats.first()
-                            rev = float(res.rev or 0.0)
-                            pkg_count = int(res.pkgs or 0)
-                        except Exception as e:
-                            stats_log(f"Lỗi truy vấn Thống kê tại Node [{node_key}]: {e}")
-                            
-                        return rev, pkg_count
-                except Exception as e:
-                    stats_log(f"LỖI KẾT NỐI Node [{node_key}] khi lấy doanh thu: {e}")
-                    return 0.0, 0
-
-            with ThreadPoolExecutor(max_workers=3) as executor:
-                futures = {executor.submit(query_revenue_node, node): node for node in nodes_to_query}
-                for future in as_completed(futures):
-                    rev, pkgs = future.result()
-                    total_revenue += rev
-                    total_packages += pkgs
+            stats_log(f"Lấy Revenue: Start={start_date}, End={end_date}, Warehouse={warehouse_id or 'All'} -> Doanh thu={total_revenue}, Kiện={total_packages}")
 
             return {
                 "period": period,
@@ -280,3 +175,128 @@ class StatsService:
             }
         finally:
             main_db.close()
+
+    @staticmethod
+    def sync_all_stats_to_central():
+        """
+        Chạy truy vấn phân tán tới các node để lấy thông tin kiện đã giao và tổng hợp về 2 bảng thống kê tại DB tập trung.
+        """
+        stats_log("BẮT ĐẦU TỔNG HỢP THỐNG KÊ TỪ CÁC NODE VỀ DB TẬP TRUNG...")
+        
+        from BE.database import SessionLocal
+        main_db = SessionLocal()
+        
+        nodes = ["north", "central", "south"]
+        log_ids = []
+
+        try:
+            # 1. Tạo bản ghi ReplicationLog cho tất cả các node với trạng thái PENDING
+            for node_key in nodes:
+                log = ReplicationLog(
+                    table_name="stats",
+                    record_id=0,
+                    action="SYNC_STATS",
+                    target_node=node_key,
+                    status="PENDING",
+                    retry_count=0
+                )
+                main_db.add(log)
+                main_db.flush() # Để lấy ID
+                log_ids.append(log.id)
+            
+            main_db.commit()
+
+            # 2. Gọi Worker để xử lý đồng bộ ngay lập tức
+            from BE.workers.replication_worker import replication_worker
+            results = replication_worker.sync_logs_immediately(log_ids)
+
+            return results
+        finally:
+            main_db.close()
+
+    @staticmethod
+    def sync_node_stats(node_key: str):
+        """Đồng bộ bù cho 1 Node cụ thể (thường gọi từ ReplicationWorker)"""
+        from BE.database import SessionLocal
+        main_db = SessionLocal()
+        try:
+            StatsService._sync_single_node(node_key, main_db)
+        finally:
+            main_db.close()
+
+    @staticmethod
+    def _sync_single_node(node_key: str, main_db: Session) -> tuple[int, int]:
+        """Logic lõi để sync 1 node (Private method)"""
+        stats_log(f"Đang đồng bộ dữ liệu Node: {node_key}")
+        try:
+            from BE.database import get_db_node
+            node_session = get_db_node(node_key)
+            
+            # 1. Tổng hợp chi tiết sản phẩm
+            stmt_products = text("""
+                SELECT 
+                    pd.product_id, 
+                    p.warehouse_id, 
+                    DATE(p.created_at) as del_date,
+                    SUM(pd.quantity) as qty,
+                    SUM(pd.quantity * prod.price) as rev
+                FROM packages p
+                JOIN package_details pd ON p.id = pd.package_id
+                JOIN products prod ON pd.product_id = prod.id
+                WHERE p.status = 'Delivered'
+                GROUP BY pd.product_id, p.warehouse_id, del_date
+            """)
+            
+            product_rows = node_session.execute(stmt_products).fetchall()
+            for row in product_rows:
+                upsert_prod = text("""
+                    INSERT INTO product_sales_stats (product_id, warehouse_id, delivered_at, quantity, revenue)
+                    VALUES (:pid, :wid, :dat, :qty, :rev)
+                    ON DUPLICATE KEY UPDATE 
+                        quantity = VALUES(quantity),
+                        revenue = VALUES(revenue)
+                """)
+                main_db.execute(upsert_prod, {
+                    "pid": row.product_id,
+                    "wid": row.warehouse_id,
+                    "dat": row.del_date,
+                    "qty": row.qty,
+                    "rev": row.rev
+                })
+            
+            # 2. Tổng hợp hiệu suất kho
+            stmt_warehouse = text("""
+                SELECT 
+                    p.warehouse_id, 
+                    DATE(p.created_at) as del_date,
+                    SUM(pd.quantity * prod.price) as total_rev,
+                    COUNT(DISTINCT p.id) as pkg_count
+                FROM packages p
+                JOIN package_details pd ON p.id = pd.package_id
+                JOIN products prod ON pd.product_id = prod.id
+                WHERE p.status = 'Delivered'
+                GROUP BY p.warehouse_id, del_date
+            """)
+            
+            warehouse_rows = node_session.execute(stmt_warehouse).fetchall()
+            for row in warehouse_rows:
+                upsert_wh = text("""
+                    INSERT INTO warehouse_performance_stats (warehouse_id, delivered_at, total_revenue, package_count)
+                    VALUES (:wid, :dat, :rev, :pkg)
+                    ON DUPLICATE KEY UPDATE 
+                        total_revenue = VALUES(total_revenue),
+                        package_count = VALUES(package_count)
+                """)
+                main_db.execute(upsert_wh, {
+                    "wid": row.warehouse_id,
+                    "dat": row.del_date,
+                    "rev": row.total_rev,
+                    "pkg": row.pkg_count
+                })
+            
+            main_db.commit()
+            stats_log(f"Node [{node_key}]: Thành công ({len(product_rows)} SP, {len(warehouse_rows)} WH)")
+            node_session.close()
+            return len(product_rows), len(warehouse_rows)
+        except Exception as e:
+            raise e

@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text, inspect
 import asyncio
+from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
 
 from BE.database import Base, SessionLocal, engine, engines, circuit_breaker
@@ -19,20 +20,44 @@ from BE.routers.replication import router as replication_router
 from BE.routers.replication import initial_full_sync
 from BE.workers.replication_worker import replication_worker
 
+async def schedule_stats_sync():
+    """Vòng lặp chạy đồng bộ thống kê định kỳ vào lúc 1:00 AM"""
+    from BE.services.stats_service import StatsService
+    while True:
+        now = datetime.now()
+        # Chạy lúc 1:00 sáng
+        target = now.replace(hour=12, minute=40, second=0, microsecond=0)
+        if now >= target:
+            target += timedelta(days=1)
+        
+        sleep_seconds = (target - now).total_seconds()
+        print(f"[DailyStats] Nhiệm vụ đồng bộ được lên lịch vào: {target.strftime('%Y-%m-%d %H:%M:%S')} (nghỉ {sleep_seconds/3600:.2f} giờ)")
+        
+        await asyncio.sleep(sleep_seconds)
+        
+        try:
+            # Chạy logic tổng hợp
+            StatsService.sync_all_stats_to_central()
+        except Exception as e:
+            print(f"[DailyStats] Lỗi khi chạy đồng bộ định kỳ: {e}")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from BE.utils.migration import migrate_main_inventories_to_shards
     print("Khởi tạo cấu trúc bảng cho toàn bộ CSDL Phân tán...")
     
-    # 1. Tạo tất cả các bảng ở Main DB (Trung tâm), ngoại trừ dữ liệu phân mảnh (inventories, packages, stats,...)
+    # Kích hoạt worker đồng bộ thống kê định kỳ
+    asyncio.create_task(schedule_stats_sync())
+
+    # 1. Tạo tất cả các bảng ở Main DB (Trung tâm), ngoại trừ dữ liệu phân mảnh (inventories, packages,...)
     if "main" in engines:
         try:
             main_tables = [
                 table for name, table in Base.metadata.tables.items()
-                if name not in ["inventories", "packages", "package_details", "package_sales_stats", "warehouses"]
+                if name not in ["inventories", "packages", "package_details"]
             ]
             Base.metadata.create_all(bind=engines["main"], tables=main_tables)
-            print("Đã khởi tạo toàn bộ cấu trúc bảng cho Main DB (ngoại trừ dữ liệu phân sharding).")
+            print("Đã khởi tạo toàn bộ cấu trúc bảng cho Main DB (ngoại trừ dữ liệu sharding tồn kho/kiện hàng).")
 
         except Exception as e:
             print(f"Error: Không thể khởi tạo bảng cho Main DB: {e}")
@@ -40,7 +65,7 @@ async def lifespan(app: FastAPI):
     # 2. Tạo cấu trúc bảng cho các Node chi nhánh và xóa bảng không cần thiết
     # Lưu ý: categories và products được giữ lại ở Node để thực hiện join dữ liệu local (Read-replicated)
     # warehouses được phân mảnh nguyên thủy (PHF) trên các Node phụ
-    DISTRIBUTED_TABLE_NAMES = ["warehouses", "categories", "products", "inventories", "packages", "package_details", "package_sales_stats"]
+    DISTRIBUTED_TABLE_NAMES = ["warehouses", "categories", "products", "inventories", "packages", "package_details"]
     
     node_tables = [
         table for name, table in Base.metadata.tables.items()
