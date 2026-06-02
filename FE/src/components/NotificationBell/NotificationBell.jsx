@@ -24,7 +24,7 @@ export default function NotificationBell() {
             id: Date.now(),
             type: data.type,
             message: data.type === 'SYNC_ERROR' 
-              ? `Lỗi đồng bộ Site ${data.node?.toUpperCase()}`
+              ? `Lỗi cập nhật Site ${data.node?.toUpperCase()}`
               : `Đã khôi phục Site ${data.node?.toUpperCase()}`,
             description: data.message,
             time: new Date().toLocaleString()
@@ -103,7 +103,7 @@ export default function NotificationBell() {
       {/* Custom Sliding Drawer Panel */}
       <div className={`${styles.drawer} ${isOpen ? styles.drawerOpen : ''}`}>
         <div className={styles.header}>
-          <h3 className={styles.title}>Lịch sử đồng bộ hệ thống</h3>
+          <h3 className={styles.title}>Lịch sử cập nhật hệ thống</h3>
           <button 
             className={styles.closeBtn} 
             onClick={() => setIsOpen(false)}

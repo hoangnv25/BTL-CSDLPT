@@ -39,7 +39,7 @@ def get_revenue(
     """
     return StatsService.get_revenue_stats(period, warehouse_id, specific_date, specific_month, specific_year)
 
-@router.post("/sync", summary="Kích hoạt đồng bộ thống kê thủ công")
+@router.post("/sync", summary="Kích hoạt cập nhật thống kê thủ công")
 async def manual_sync_stats(
     specific_date: Optional[date] = Query(None, description="Ngày cụ thể (YYYY-MM-DD)"),
     specific_month: Optional[int] = Query(None, ge=1, le=12, description="Tháng cụ thể (1-12)"),
@@ -63,10 +63,10 @@ async def manual_sync_stats(
                     "node": node,
                     "action": "SYNC_STATS",
                     "table": "stats",
-                    "message": f"Thất bại khi sync Node {node}, đã đưa vào hàng đợi đồng bộ bù."
+                    "message": f"Thất bại khi cập nhật Node {node}, đã đưa vào hàng đợi cập nhật bù."
                 })
 
-        return {"status": "success", "message": "Đã hoàn thành đồng bộ thống kê thủ công"}
+        return {"status": "success", "message": "Đã hoàn thành cập nhật thống kê thủ công"}
     except Exception as e:
         print(f"Error in manual_sync_stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))

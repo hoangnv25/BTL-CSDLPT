@@ -61,7 +61,7 @@ class ReplicationWorker:
                             "node": node,
                             "action": action,
                             "table": table_name,
-                            "message": f"Đã đồng bộ bù thành công dữ liệu cho Node {node}!"
+                            "message": f"Đã cập nhật bù thành công dữ liệu cho Node {node}!"
                         }), loop)
                 else:
                     log.retry_count += 1
@@ -238,7 +238,7 @@ class ReplicationWorker:
             "action": action,
             "table": table_name,
             "retry_count": retry_count,
-            "message": f"Không thể đồng bộ thao tác {action} trên bảng {table_name} tới site {node}. Đang thử lại lần {retry_count}/3."
+            "message": f"Không thể cập nhật thao tác {action} trên bảng {table_name} tới site {node}. Đang thử lại lần {retry_count}/3."
         }
         await manager.broadcast(message)
 

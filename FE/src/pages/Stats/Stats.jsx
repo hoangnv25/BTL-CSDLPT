@@ -81,7 +81,7 @@ export default function Stats({ warehouse_id = null }) {
   };
 
   const handleManualSync = async () => {
-    const hide = message.loading('Đang đồng bộ dữ liệu...', 0);
+    const hide = message.loading('Đang cập nhật dữ liệu...', 0);
     setLoading(true);
     try {
       let queryParams = '';
@@ -102,14 +102,14 @@ export default function Stats({ warehouse_id = null }) {
       const data = await res.json();
       hide();
       if (res.ok) {
-        message.success(data.message || "Đồng bộ thành công!");
+        message.success(data.message || "Cập nhật thành công!");
         fetchStats();
       } else {
-        message.error(data.detail || "Lỗi đồng bộ");
+        message.error(data.detail || "Lỗi cập nhật");
       }
     } catch (err) {
       hide();
-      console.error("Lỗi đồng bộ:", err);
+      console.error("Lỗi cập nhật:", err);
       message.error("Lỗi kết nối máy chủ");
     } finally {
       setLoading(false);
@@ -265,7 +265,7 @@ export default function Stats({ warehouse_id = null }) {
             disabled={loading}
           >
             <ArrowsClockwise size={18} weight="bold" className={loading ? styles.spinning : ''} />
-            <span>Đồng bộ</span>
+            <span>Cập nhật</span>
           </button>
         </div>
       </div>
