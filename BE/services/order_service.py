@@ -89,7 +89,7 @@ class OrderService:
         # Khởi động Transaction & Khóa dòng tồn kho (with_for_update) chống race conditions
         service_log("OrderService", "Bắt đầu mở các kết nối/transaction đến các Node phụ...")
         
-        # 1. Truy vấn các warehouses từ main DB để biết phân vùng miền (Region) của từng warehouse
+        # 1. Truy vấn các warehouses (Scatter-Gather từ các Node nhánh) để biết phân vùng miền (Region) của từng warehouse
         from BE.repositories.warehouse_repository import WarehouseRepository
         warehouses_list = WarehouseRepository.list_all(self._session)
         warehouse_regions = {w.id: w.region.value.lower() for w in warehouses_list}
@@ -379,11 +379,6 @@ class OrderService:
         packages_data = []
         failed_nodes = []
         is_partial = False
-        
-        # Nếu chưa có ánh xạ nào (có thể là đơn hàng cũ trước khi sharding), thực hiện quét trên cả 3 Node
-        if not target_nodes:
-            service_log("OrderService", f"Không tìm thấy ánh xạ. Fallback thực hiện Scatter-Gather trên cả 3 Node phụ...")
-            target_nodes = ["north", "central", "south"]
 
         # 2. Truy vấn kiện hàng từ đúng các Node phụ được chỉ định
         from BE.database import get_db_node, circuit_breaker

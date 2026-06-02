@@ -79,9 +79,10 @@ export default function MyOrderCreateModal({ isOpen, onClose, onSuccess }) {
       return;
     }
     
-    const validItems = items.filter(item => item.product_id && item.quantity > 0);
+    // Cho phép gửi mọi số lượng (kể cả <= 0) lên BE để test validation của BE
+    const validItems = items.filter(item => item.product_id);
     if (validItems.length === 0) {
-      setError('Vui lòng thêm ít nhất 1 sản phẩm với số lượng > 0');
+      setError('Vui lòng chọn ít nhất 1 sản phẩm');
       return;
     }
     
@@ -94,7 +95,7 @@ export default function MyOrderCreateModal({ isOpen, onClose, onSuccess }) {
       shipping_address: shippingAddress,
       items: validItems.map(i => ({
         product_id: parseInt(i.product_id),
-        quantity: parseInt(i.quantity)
+        quantity: isNaN(parseInt(i.quantity)) ? i.quantity : parseInt(i.quantity)
       }))
     };
 
@@ -206,8 +207,7 @@ export default function MyOrderCreateModal({ isOpen, onClose, onSuccess }) {
                           <button 
                             type="button" 
                             className={styles.qtyBtn}
-                            onClick={() => handleItemChange(index, 'quantity', Math.max(1, parseInt(item.quantity || 1) - 1))}
-                            disabled={parseInt(item.quantity || 1) <= 1}
+                            onClick={() => handleItemChange(index, 'quantity', (parseInt(item.quantity) || 0) - 1)}
                           >
                             -
                           </button>
@@ -215,14 +215,12 @@ export default function MyOrderCreateModal({ isOpen, onClose, onSuccess }) {
                             type="number" 
                             className={styles.qtyInput}
                             value={item.quantity}
-                            onChange={(e) => handleItemChange(index, 'quantity', Math.max(1, parseInt(e.target.value) || 1))}
-                            min="1"
-                            required
+                            onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
                           />
                           <button 
                             type="button" 
                             className={styles.qtyBtn}
-                            onClick={() => handleItemChange(index, 'quantity', parseInt(item.quantity || 1) + 1)}
+                            onClick={() => handleItemChange(index, 'quantity', (parseInt(item.quantity) || 0) + 1)}
                           >
                             +
                           </button>
