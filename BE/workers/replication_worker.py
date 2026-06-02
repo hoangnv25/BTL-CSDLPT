@@ -1,4 +1,5 @@
 import asyncio
+import os
 from sqlalchemy import select
 from datetime import datetime, timezone
 import json
@@ -27,9 +28,13 @@ class ReplicationWorker:
             except Exception as e:
                 print(f"Replication worker error: {e}")
             
-            # Chạy ngay lập tức khi được trigger, hoặc tự động quét lại sau 3.0 giây
+            # Chạy ngay lập tức khi được trigger, hoặc tự động quét lại sau REPLICATION_INTERVAL giây (cấu hình trong .env)
             try:
-                await asyncio.wait_for(self._trigger_event.wait(), timeout=3.0)
+                try:
+                    interval = float(os.getenv("REPLICATION_INTERVAL", "5.0"))
+                except ValueError:
+                    interval = 3.0
+                await asyncio.wait_for(self._trigger_event.wait(), timeout=interval)
             except asyncio.TimeoutError:
                 pass
             finally:
