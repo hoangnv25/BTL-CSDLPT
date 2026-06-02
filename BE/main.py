@@ -43,7 +43,7 @@ async def schedule_stats_sync():
             target += timedelta(days=1)
         
         sleep_seconds = (target - now).total_seconds()
-        print(f"[DailyStats] Nhiệm vụ đồng bộ được lên lịch vào: {target.strftime('%Y-%m-%d %H:%M:%S')} (Múi giờ VN, nghỉ {sleep_seconds/3600:.2f} giờ)")
+        print(f"[DailyStats] Nhiệm vụ cập nhật được lên lịch vào: {target.strftime('%Y-%m-%d %H:%M:%S')} (Múi giờ VN, nghỉ {sleep_seconds/3600:.2f} giờ)")
         
         await asyncio.sleep(sleep_seconds)
         
@@ -51,7 +51,7 @@ async def schedule_stats_sync():
             # Chạy logic tổng hợp
             StatsService.sync_all_stats_to_central()
         except Exception as e:
-            print(f"[DailyStats] Lỗi khi chạy đồng bộ định kỳ: {e}")
+            print(f"[DailyStats] Lỗi khi chạy cập nhật định kỳ: {e}")
 
 
 async def heartbeat_check_nodes():

@@ -21,7 +21,7 @@ export default function NotificationBell() {
           
           // Lưu vào lịch sử
           const newNoti = {
-            id: Date.now(),
+            id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             type: data.type,
             message: data.type === 'SYNC_ERROR' 
               ? `Lỗi cập nhật Site ${data.node?.toUpperCase()}`

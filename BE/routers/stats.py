@@ -55,16 +55,7 @@ async def manual_sync_stats(
             specific_year=specific_year
         )
         
-        # Bắn thông báo qua WebSocket cho các node thất bại ngay lập tức
-        for node, status in results.items():
-            if status == "FAILED":
-                await manager.broadcast({
-                    "type": "SYNC_ERROR",
-                    "node": node,
-                    "action": "SYNC_STATS",
-                    "table": "stats",
-                    "message": f"Thất bại khi cập nhật Node {node}, đã đưa vào hàng đợi cập nhật bù."
-                })
+        # Các thông báo lỗi chi tiết đã được gửi tự động thông qua replication_worker.sync_logs_immediately
 
         return {"status": "success", "message": "Đã hoàn thành cập nhật thống kê thủ công"}
     except Exception as e:

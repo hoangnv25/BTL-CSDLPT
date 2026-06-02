@@ -79,6 +79,11 @@ class ReplicationWorker:
         Dùng cho phản hồi API ngay lập tức cho người dùng.
         """
         results = {}
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
         with SessionLocal() as db:
             stmt = select(ReplicationLog).where(ReplicationLog.id.in_(log_ids))
             logs = db.scalars(stmt).all()
@@ -89,13 +94,21 @@ class ReplicationWorker:
                     continue
                     
                 success = self._sync_log(log)
+                node = log.target_node
+                action = log.action
+                table_name = log.table_name
+
                 if success:
                     log.status = "SUCCESS"
-                    results[log.target_node] = "SUCCESS"
+                    results[node] = "SUCCESS"
                 else:
                     log.retry_count += 1
                     log.status = "FAILED"
-                    results[log.target_node] = "FAILED"
+                    results[node] = "FAILED"
+                    
+                    retry_count = log.retry_count
+                    if loop:
+                        asyncio.run_coroutine_threadsafe(self._notify_fe(node, action, table_name, retry_count), loop)
             
             db.commit()
         return results

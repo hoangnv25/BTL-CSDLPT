@@ -79,8 +79,8 @@ def seed():
                 with node_engine.connect() as node_conn:
                     # Tạo Package với trạng thái Delivered để khớp với dữ liệu Stats
                     pkg_result = node_conn.execute(text("""
-                        INSERT INTO packages (order_id, warehouse_id, status, created_at)
-                        VALUES (:oid, :wid, 'Delivered', :cat)
+                        INSERT INTO packages (order_id, warehouse_id, status, created_at, delivered_at)
+                        VALUES (:oid, :wid, 'Delivered', :cat, :cat)
                     """), {"oid": order_id, "wid": wh["id"], "cat": ordered_at})
                     pkg_id = pkg_result.lastrowid
                     

@@ -138,8 +138,8 @@ function App() {
         <main style={{ flex: 1, overflowY: 'auto', padding: '2rem', position: 'relative' }}>
           {renderContent()}
 
-          {/* Component Chuông và Drawer thông báo đồng bộ (Chỉ hiển thị với Admin tổng) */}
-          {currentOption === 'admin' && <NotificationBell />}
+          {/* Component Chuông và Drawer thông báo cập nhật (Hiển thị cho Quản trị và Quản lý tổng) */}
+          {(currentOption === 'admin' || currentOption === 'host') && <NotificationBell />}
         </main>
       </div>
     </ConfigProvider>
