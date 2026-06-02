@@ -47,8 +47,8 @@ INSERT INTO products (id, name, category_id, price, deleted_at) VALUES
 
 -- 4. Thêm các nhà kho thuộc Miền Bắc (Region: North)
 INSERT INTO warehouses (id, name, region, address) VALUES
-(1, 'Kho Hà Nội Đông Anh', 'North', 'Số 5, KCN Đông Anh, Hà Nội'),
-(2, 'Kho Hải Phòng Cát Hải', 'North', 'Cảng Đình Vũ, Quận Hải An, Hải Phòng');
+(1, 'Kho Hà Nội', 'North', 'Số 5, KCN Đông Anh, Hà Nội'),
+(2, 'Kho Hải Phòng', 'North', 'Cảng Đình Vũ, Quận Hải An, Hải Phòng');
 
 -- 5. Khởi tạo tồn kho (inventories) của 2 kho Miền Bắc
 -- Đã trừ đi hàng bán trong tháng 5 và tháng 6

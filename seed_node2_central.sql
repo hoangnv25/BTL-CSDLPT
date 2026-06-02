@@ -47,7 +47,7 @@ INSERT INTO products (id, name, category_id, price, deleted_at) VALUES
 
 -- 4. Thêm các nhà kho thuộc Miền Trung (Region: Central)
 INSERT INTO warehouses (id, name, region, address) VALUES
-(3, 'Kho Đà Nẵng Liên Chiểu', 'Central', 'Đường số 2, KCN Hòa Khánh, Liên Chiểu, Đà Nẵng');
+(3, 'Kho Đà Nẵng', 'Central', 'Đường số 2, KCN Hòa Khánh, Liên Chiểu, Đà Nẵng');
 
 -- 5. Khởi tạo tồn kho (inventories) của Kho Miền Trung
 -- Đã trừ số lượng hàng của các đơn hàng đã đặt

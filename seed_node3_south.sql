@@ -47,8 +47,8 @@ INSERT INTO products (id, name, category_id, price, deleted_at) VALUES
 
 -- 4. Thêm các nhà kho thuộc Miền Nam (Region: South)
 INSERT INTO warehouses (id, name, region, address) VALUES
-(4, 'Kho TP.HCM Thủ Đức', 'South', 'Khu chế xuất Linh Trung, Thủ Đức, TP.HCM'),
-(5, 'Kho Cần Thơ Cái Răng', 'South', 'KCN Hưng Phú, Cái Răng, Cần Thơ');
+(4, 'Kho TP.HCM', 'South', 'Khu chế xuất Linh Trung, Thủ Đức, TP.HCM'),
+(5, 'Kho Cần Thơ', 'South', 'KCN Hưng Phú, Cái Răng, Cần Thơ');
 
 -- 5. Khởi tạo tồn kho (inventories) của 2 kho Miền Nam
 -- Đã trừ số lượng hàng của các đơn hàng đã đặt
