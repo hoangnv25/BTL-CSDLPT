@@ -110,7 +110,26 @@ class ReplicationWorker:
             try:
                 from BE.services.stats_service import StatsService
                 print(f"ReplicationWorker: Đang đồng bộ bù Stats cho Node [{log.target_node}]...")
-                StatsService.sync_node_stats(log.target_node)
+                
+                # Giải mã các tham số thời gian từ payload
+                params = {}
+                if log.data_payload:
+                    try:
+                        params = json.loads(log.data_payload)
+                    except Exception as pe:
+                        print(f"ReplicationWorker: Lỗi parse data_payload: {pe}")
+                
+                spec_date_str = params.get("specific_date")
+                spec_date = datetime.strptime(spec_date_str, "%Y-%m-%d").date() if spec_date_str else None
+                spec_month = params.get("specific_month")
+                spec_year = params.get("specific_year")
+
+                StatsService.sync_node_stats(
+                    log.target_node,
+                    specific_date=spec_date,
+                    specific_month=spec_month,
+                    specific_year=spec_year
+                )
                 return True
             except Exception as e:
                 print(f"ReplicationWorker: Lỗi sync bù Stats cho [{log.target_node}]: {e}")

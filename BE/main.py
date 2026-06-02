@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text, inspect
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from contextlib import asynccontextmanager
 
 from BE.database import Base, SessionLocal, engine, engines, circuit_breaker
@@ -21,17 +21,29 @@ from BE.routers.replication import initial_full_sync
 from BE.workers.replication_worker import replication_worker
 
 async def schedule_stats_sync():
-    """Vòng lặp chạy đồng bộ thống kê định kỳ vào lúc 1:00 AM"""
+    """Vòng lặp chạy đồng bộ thống kê định kỳ dựa trên cấu hình ở .env (Múi giờ Việt Nam GMT+7)"""
     from BE.services.stats_service import StatsService
+    import os
+    
+    tz_vn = timezone(timedelta(hours=7))
+    sync_time_str = os.getenv("STATS_SYNC_TIME", "01:00")
+    try:
+        hour_str, minute_str = sync_time_str.split(":")
+        sync_hour = int(hour_str)
+        sync_minute = int(minute_str)
+    except Exception as e:
+        print(f"[DailyStats] Lỗi cấu hình STATS_SYNC_TIME ({sync_time_str}), fallback về 01:00: {e}")
+        sync_hour = 1
+        sync_minute = 0
+
     while True:
-        now = datetime.now()
-        # Chạy lúc 1:00 sáng
-        target = now.replace(hour=14, minute=31, second=0, microsecond=0)
+        now = datetime.now(tz_vn)
+        target = now.replace(hour=sync_hour, minute=sync_minute, second=0, microsecond=0)
         if now >= target:
             target += timedelta(days=1)
         
         sleep_seconds = (target - now).total_seconds()
-        print(f"[DailyStats] Nhiệm vụ đồng bộ được lên lịch vào: {target.strftime('%Y-%m-%d %H:%M:%S')} (nghỉ {sleep_seconds/3600:.2f} giờ)")
+        print(f"[DailyStats] Nhiệm vụ đồng bộ được lên lịch vào: {target.strftime('%Y-%m-%d %H:%M:%S')} (Múi giờ VN, nghỉ {sleep_seconds/3600:.2f} giờ)")
         
         await asyncio.sleep(sleep_seconds)
         

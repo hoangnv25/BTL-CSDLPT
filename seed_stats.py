@@ -51,7 +51,7 @@ def seed():
                     rev = qty * product_prices[pid]
                     
                     stmt = text("""
-                        INSERT INTO product_sales_stats (product_id, warehouse_id, delivered_at, quantity, revenue)
+                        INSERT INTO product_stats (product_id, warehouse_id, delivered_at, quantity, revenue)
                         VALUES (:pid, :wh_id, :sdate, :qty, :rev)
                         ON DUPLICATE KEY UPDATE 
                             quantity = quantity + :qty,

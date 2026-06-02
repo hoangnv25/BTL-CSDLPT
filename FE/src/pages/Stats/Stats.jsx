@@ -84,7 +84,21 @@ export default function Stats({ warehouse_id = null }) {
     const hide = message.loading('Đang đồng bộ dữ liệu...', 0);
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/stats/sync`, { method: 'POST' });
+      let queryParams = '';
+      if (period === 'day' && selectedDate) {
+        queryParams = `specific_date=${selectedDate}`;
+      } else if (period === 'month' && selectedMonth) {
+        const [year, month] = selectedMonth.split('-');
+        queryParams = `specific_month=${parseInt(month)}&specific_year=${year}`;
+      } else if (period === 'year' && selectedDate) {
+        queryParams = `specific_year=${dayjs(selectedDate).year()}`;
+      }
+
+      const url = queryParams 
+        ? `${API_BASE_URL}/stats/sync?${queryParams}` 
+        : `${API_BASE_URL}/stats/sync`;
+
+      const res = await fetch(url, { method: 'POST' });
       const data = await res.json();
       hide();
       if (res.ok) {
@@ -302,7 +316,7 @@ export default function Stats({ warehouse_id = null }) {
                 <th className={styles.th} style={{ width: '80px' }}>Hạng</th>
                 <th className={styles.th}>Sản phẩm</th>
                 <th className={styles.th}>Đơn giá</th>
-                <th className={styles.th} style={{ textAlign: 'right' }}>Đã bán</th>
+                <th className={styles.th}>Đã bán</th>
               </tr>
             </thead>
             <tbody>

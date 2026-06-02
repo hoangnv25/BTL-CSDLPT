@@ -40,12 +40,20 @@ def get_revenue(
     return StatsService.get_revenue_stats(period, warehouse_id, specific_date, specific_month, specific_year)
 
 @router.post("/sync", summary="Kích hoạt đồng bộ thống kê thủ công")
-async def manual_sync_stats():
+async def manual_sync_stats(
+    specific_date: Optional[date] = Query(None, description="Ngày cụ thể (YYYY-MM-DD)"),
+    specific_month: Optional[int] = Query(None, ge=1, le=12, description="Tháng cụ thể (1-12)"),
+    specific_year: Optional[int] = Query(None, description="Năm cụ thể (YYYY)")
+):
     """
     Kích hoạt tiến trình quét và tổng hợp dữ liệu từ các node nhánh về DB trung tâm ngay lập tức.
     """
     try:
-        results = StatsService.sync_all_stats_to_central()
+        results = StatsService.sync_all_stats_to_central(
+            specific_date=specific_date,
+            specific_month=specific_month,
+            specific_year=specific_year
+        )
         
         # Bắn thông báo qua WebSocket cho các node thất bại ngay lập tức
         for node, status in results.items():

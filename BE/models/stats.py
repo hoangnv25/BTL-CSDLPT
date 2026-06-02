@@ -5,7 +5,7 @@ from BE.database import Base
 
 class ProductSalesStat(Base):
     """Thống kê chi tiết theo sản phẩm (Bảng A)"""
-    __tablename__ = "product_sales_stats"
+    __tablename__ = "product_stats"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     product_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
@@ -20,7 +20,7 @@ class ProductSalesStat(Base):
 
 class WarehousePerformanceStat(Base):
     """Thống kê tổng quan theo hiệu suất kho (Bảng B)"""
-    __tablename__ = "warehouse_performance_stats"
+    __tablename__ = "warehouse_stats"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     warehouse_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)

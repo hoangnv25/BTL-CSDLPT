@@ -5,7 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from BE.database import Base
 
 class ReplicationLog(Base):
-    __tablename__ = "replication_logs"
+    __tablename__ = "logs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     table_name: Mapped[str] = mapped_column(String(50), nullable=False)

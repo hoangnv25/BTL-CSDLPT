@@ -177,12 +177,17 @@ class StatsService:
             main_db.close()
 
     @staticmethod
-    def sync_all_stats_to_central():
+    def sync_all_stats_to_central(
+        specific_date: Optional[date] = None,
+        specific_month: Optional[int] = None,
+        specific_year: Optional[int] = None
+    ):
         """
         Chạy truy vấn phân tán tới các node để lấy thông tin kiện đã giao và tổng hợp về 2 bảng thống kê tại DB tập trung.
         """
         stats_log("BẮT ĐẦU TỔNG HỢP THỐNG KÊ TỪ CÁC NODE VỀ DB TẬP TRUNG...")
         
+        import json
         from BE.database import SessionLocal
         main_db = SessionLocal()
         
@@ -192,13 +197,22 @@ class StatsService:
         try:
             # 1. Tạo bản ghi ReplicationLog cho tất cả các node với trạng thái PENDING
             for node_key in nodes:
+                payload = {}
+                if specific_date:
+                    payload["specific_date"] = specific_date.isoformat()
+                if specific_month:
+                    payload["specific_month"] = specific_month
+                if specific_year:
+                    payload["specific_year"] = specific_year
+
                 log = ReplicationLog(
                     table_name="stats",
                     record_id=0,
                     action="SYNC_STATS",
                     target_node=node_key,
                     status="PENDING",
-                    retry_count=0
+                    retry_count=0,
+                    data_payload=json.dumps(payload) if payload else None
                 )
                 main_db.add(log)
                 main_db.flush() # Để lấy ID
@@ -215,42 +229,79 @@ class StatsService:
             main_db.close()
 
     @staticmethod
-    def sync_node_stats(node_key: str):
+    def sync_node_stats(
+        node_key: str,
+        specific_date: Optional[date] = None,
+        specific_month: Optional[int] = None,
+        specific_year: Optional[int] = None
+    ):
         """Đồng bộ bù cho 1 Node cụ thể (thường gọi từ ReplicationWorker)"""
         from BE.database import SessionLocal
         main_db = SessionLocal()
         try:
-            StatsService._sync_single_node(node_key, main_db)
+            StatsService._sync_single_node(
+                node_key, 
+                main_db,
+                specific_date=specific_date,
+                specific_month=specific_month,
+                specific_year=specific_year
+            )
         finally:
             main_db.close()
 
     @staticmethod
-    def _sync_single_node(node_key: str, main_db: Session) -> tuple[int, int]:
+    def _sync_single_node(
+        node_key: str, 
+        main_db: Session,
+        specific_date: Optional[date] = None,
+        specific_month: Optional[int] = None,
+        specific_year: Optional[int] = None
+    ) -> tuple[int, int]:
         """Logic lõi để sync 1 node (Private method)"""
-        stats_log(f"Đang đồng bộ dữ liệu Node: {node_key}")
+        stats_log(f"Đang đồng bộ dữ liệu Node: {node_key} (Date={specific_date}, Month={specific_month}, Year={specific_year})")
         try:
             from BE.database import get_db_node
             node_session = get_db_node(node_key)
             
+            # Xây dựng điều kiện lọc thời gian động trên Node nhánh
+            where_clauses = ["p.status = 'Delivered'"]
+            sql_params = {}
+            
+            if specific_date:
+                where_clauses.append("DATE(p.delivered_at) = :spec_date")
+                sql_params["spec_date"] = specific_date
+            elif specific_month and specific_year:
+                where_clauses.append("YEAR(p.delivered_at) = :spec_year AND MONTH(p.delivered_at) = :spec_month")
+                sql_params["spec_month"] = specific_month
+                sql_params["spec_year"] = specific_year
+            elif specific_year:
+                where_clauses.append("YEAR(p.delivered_at) = :spec_year")
+                sql_params["spec_year"] = specific_year
+            else:
+                # Mặc định quét cửa sổ trượt 3 ngày gần nhất để đảm bảo hiệu năng
+                where_clauses.append("p.delivered_at >= DATE_SUB(NOW(), INTERVAL 3 DAY)")
+                
+            where_str = " AND ".join(where_clauses)
+            
             # 1. Tổng hợp chi tiết sản phẩm
-            stmt_products = text("""
+            stmt_products = text(f"""
                 SELECT 
                     pd.product_id, 
                     p.warehouse_id, 
-                    DATE(p.created_at) as del_date,
+                    DATE(p.delivered_at) as del_date,
                     SUM(pd.quantity) as qty,
                     SUM(pd.quantity * prod.price) as rev
                 FROM packages p
                 JOIN package_details pd ON p.id = pd.package_id
                 JOIN products prod ON pd.product_id = prod.id
-                WHERE p.status = 'Delivered'
+                WHERE {where_str}
                 GROUP BY pd.product_id, p.warehouse_id, del_date
             """)
             
-            product_rows = node_session.execute(stmt_products).fetchall()
+            product_rows = node_session.execute(stmt_products, sql_params).fetchall()
             for row in product_rows:
                 upsert_prod = text("""
-                    INSERT INTO product_sales_stats (product_id, warehouse_id, delivered_at, quantity, revenue)
+                    INSERT INTO product_stats (product_id, warehouse_id, delivered_at, quantity, revenue)
                     VALUES (:pid, :wid, :dat, :qty, :rev)
                     ON DUPLICATE KEY UPDATE 
                         quantity = VALUES(quantity),
@@ -265,23 +316,23 @@ class StatsService:
                 })
             
             # 2. Tổng hợp hiệu suất kho
-            stmt_warehouse = text("""
+            stmt_warehouse = text(f"""
                 SELECT 
                     p.warehouse_id, 
-                    DATE(p.created_at) as del_date,
+                    DATE(p.delivered_at) as del_date,
                     SUM(pd.quantity * prod.price) as total_rev,
                     COUNT(DISTINCT p.id) as pkg_count
                 FROM packages p
                 JOIN package_details pd ON p.id = pd.package_id
                 JOIN products prod ON pd.product_id = prod.id
-                WHERE p.status = 'Delivered'
+                WHERE {where_str}
                 GROUP BY p.warehouse_id, del_date
             """)
             
-            warehouse_rows = node_session.execute(stmt_warehouse).fetchall()
+            warehouse_rows = node_session.execute(stmt_warehouse, sql_params).fetchall()
             for row in warehouse_rows:
                 upsert_wh = text("""
-                    INSERT INTO warehouse_performance_stats (warehouse_id, delivered_at, total_revenue, package_count)
+                    INSERT INTO warehouse_stats (warehouse_id, delivered_at, total_revenue, package_count)
                     VALUES (:wid, :dat, :rev, :pkg)
                     ON DUPLICATE KEY UPDATE 
                         total_revenue = VALUES(total_revenue),
