@@ -78,11 +78,13 @@ SessionLocals = {}
 
 for site, url in DB_URLS.items():
     if url:
-        # Cấu hình timeout kết nối (2.0 giây) để tránh treo Backend khi một Node phụ bị sập
         engines[site] = create_engine(
             url, 
-            pool_pre_ping=True,
-            connect_args={"connect_timeout": 2.0}
+            pool_pre_ping=(site == "main"),
+            pool_size=30,
+            max_overflow=20,
+            pool_timeout=10,
+            connect_args={"connect_timeout": 0.5}
         )
         SessionLocals[site] = sessionmaker(autocommit=False, autoflush=False, bind=engines[site])
 
@@ -90,7 +92,13 @@ for site, url in DB_URLS.items():
 engine = engines.get("main")
 if engine is None:
     # Dự phòng khởi tạo từ DATABASE_URL nếu MAIN_DB_URL rỗng
-    engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+    engine = create_engine(
+        DATABASE_URL, 
+        pool_pre_ping=True,
+        pool_size=30,
+        max_overflow=20,
+        pool_timeout=10
+    )
     SessionLocals["main"] = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 SessionLocal = SessionLocals["main"]
@@ -140,15 +148,13 @@ def get_read_db(request: Request) -> Generator[Session, None, None]:
             if db:
                 session = db()
                 try:
-                    # Ping thử DB
-                    session.execute(text("SELECT 1"))
-                    circuit_breaker.mark_success(node)
                     yield session
+                    circuit_breaker.mark_success(node)
                     return
-                except Exception:
+                except Exception as e:
+                    # Phát hiện lỗi trong lúc thực hiện truy vấn (node sập hoặc lỗi mạng)
                     circuit_breaker.mark_failure(node)
-                    print(f"[Read Routing] Phát hiện Node {node} SẬP! Đang thử node khác...")
-                    session.close()
+                    print(f"[Read Routing] Phát hiện lỗi kết nối/truy vấn trên Node {node}! Đang đánh dấu OFFLINE...")
                     
                     # Bắn thông báo WebSocket cảnh báo cho Admin
                     try:
@@ -156,11 +162,16 @@ def get_read_db(request: Request) -> Generator[Session, None, None]:
                         loop = request.app.state.loop
                         msg = {
                             "type": "SYNC_ERROR",
-                            "message": f"Phát hiện Node {node.upper()} sập khi truy xuất dữ liệu! Hệ thống đã tự động bẻ lái sang nhánh khác."
+                            "message": f"Phát hiện Node {node.upper()} gặp sự cố khi truy xuất dữ liệu! Hệ thống đã cô lập node này."
                         }
                         asyncio.run_coroutine_threadsafe(manager.broadcast(msg), loop)
-                    except Exception as e:
-                        print("Không thể gửi WS cảnh báo:", e)
+                    except Exception as ws_err:
+                        print("Không thể gửi WS cảnh báo:", ws_err)
+                    
+                    # Ném tiếp exception ra ngoài để FastAPI báo lỗi cho client và không treo generator
+                    raise e
+                finally:
+                    session.close()
                     
     # Nếu tất cả các node đều sập hoặc không khả dụng -> Fallback an toàn về Main
     print(f"[Read Routing] Cảnh báo: TẤT CẢ các Node chi nhánh đã sập! Bẻ lái truy cập về MAIN DB.")
