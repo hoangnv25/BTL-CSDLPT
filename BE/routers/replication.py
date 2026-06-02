@@ -85,10 +85,11 @@ def full_sync_node(node_name: str) -> bool:
                 node_db.commit()
                 print(f"Successfully full synced node: {node_name}")
                 
-                # Xóa các log bị kẹt của node này
+                # Xóa các log bị kẹt của node này (chỉ liên quan đến danh mục và sản phẩm)
                 stmt = select(ReplicationLog).where(
                     ReplicationLog.target_node == node_name,
-                    ReplicationLog.status.in_(["PENDING", "FAILED"])
+                    ReplicationLog.status.in_(["PENDING", "FAILED"]),
+                    ReplicationLog.table_name.in_(["category", "product"])
                 )
                 stuck_logs = main_db.scalars(stmt).all()
                 for log in stuck_logs:
