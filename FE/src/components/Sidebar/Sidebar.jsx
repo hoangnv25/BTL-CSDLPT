@@ -29,7 +29,7 @@ export default function Sidebar({
     { id: 'stats', label: 'Thống Kê', icon: ChartBar },
     { id: 'customer', label: 'Khách Hàng', icon: Users },
     { id: 'category', label: 'Danh Mục Sản Phẩm', icon: ListDashes },
-    { id: 'product', label: 'Sản Phẩm', icon: Package },
+    { id: 'product', label: 'Quản lý Sản Phẩm', icon: Package },
     { id: 'warehouse', label: 'Kho Hàng', icon: WarehouseIcon },
     { id: 'inventory', label: 'Tồn Kho', icon: Stack },
     { id: 'order', label: 'Quản Lý Đơn Hàng', icon: Package },

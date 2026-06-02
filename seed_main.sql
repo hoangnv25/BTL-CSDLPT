@@ -39,30 +39,30 @@ INSERT INTO categories (id, name) VALUES
 -- 4. Thêm dữ liệu mẫu bảng products (Sản phẩm)
 INSERT INTO products (id, name, category_id, price, deleted_at) VALUES
 -- Thời trang nam (Category 1)
-(1, 'Áo thun polo nam cổ bẻ cotton tăm', 1, 250000.00, NULL),
-(2, 'Quần dài tây nam ống đứng lịch lãm', 1, 380000.00, NULL),
-(3, 'Quần jean nam co giãn màu xanh chàm', 1, 450000.00, NULL),
-(4, 'Áo khoác gió nam hai lớp chống nước', 1, 390000.00, NULL),
+(1, 'Áo polo nam', 1, 250000.00, NULL),
+(2, 'Quần tây nam', 1, 380000.00, NULL),
+(3, 'Quần jean nam', 1, 450000.00, NULL),
+(4, 'Áo khoác gió nam', 1, 390000.00, NULL),
 -- Thời trang nữ (Category 2)
-(5, 'Đầm hoa nhí voan tơ dáng xòe dài', 2, 490000.00, NULL),
-(6, 'Chân váy midi chữ A dáng dài công sở', 2, 290000.00, NULL),
-(7, 'Áo sơ mi lụa tơ tằm cổ V thanh lịch', 2, 320000.00, NULL),
-(8, 'Quần culottes vải tuyết mưa cạp cao', 2, 310000.00, NULL),
+(5, 'Đầm hoa nhí', 2, 490000.00, NULL),
+(6, 'Chân váy midi', 2, 290000.00, NULL),
+(7, 'Áo sơ mi lụa', 2, 320000.00, NULL),
+(8, 'Quần culottes nữ', 2, 310000.00, NULL),
 -- Đồ gia dụng (Category 3)
-(9, 'Nồi chiên không dầu Philips HD9252 4.1L', 3, 1850000.00, NULL),
-(10, 'Máy xay sinh tố cầm tay Braun MultiQuick', 3, 990000.00, NULL),
-(11, 'Ấm siêu tốc Tefal Safe\'tea 1.7L', 3, 680000.00, NULL),
-(12, 'Quạt cây đứng lửng Senko LTS1636', 3, 550000.00, NULL),
+(9, 'Nồi chiên không dầu', 3, 1850000.00, NULL),
+(10, 'Máy xay sinh tố', 3, 990000.00, NULL),
+(11, 'Ấm siêu tốc Tefal', 3, 680000.00, NULL),
+(12, 'Quạt đứng Senko', 3, 550000.00, NULL),
 -- Thiết bị điện tử (Category 4)
-(13, 'Tai nghe không dây Sony WF-C500 chống nước', 4, 1450000.00, NULL),
-(14, 'Bàn phím cơ Dareu EK87 Multi-LED', 4, 620000.00, NULL),
-(15, 'Chuột không dây Logitech Pebble M350', 4, 490000.00, NULL),
-(16, 'Sạc dự phòng Anker PowerCore Slim 10000mAh', 4, 580000.00, NULL),
+(13, 'Tai nghe không dây Sony', 4, 1450000.00, NULL),
+(14, 'Bàn phím cơ Dareu', 4, 620000.00, NULL),
+(15, 'Chuột không dây Logitech', 4, 490000.00, NULL),
+(16, 'Sạc dự phòng Anker', 4, 580000.00, NULL),
 -- Giày dép & Túi xách (Category 5)
-(17, 'Giày sneaker nam Biti\'s Hunter Street', 5, 890000.00, NULL),
-(18, 'Giày cao gót nữ Đông Hải da mềm 5cm', 5, 650000.00, NULL),
-(19, 'Balo học sinh chống gù Miti bảo vệ cột sống', 5, 350000.00, NULL),
-(20, 'Ví da nam da bò thật nhỏ gọn Sen', 5, 290000.00, NULL);
+(17, 'Sneaker nam Biti\'s', 5, 890000.00, NULL),
+(18, 'Giày cao gót Đông Hải', 5, 650000.00, NULL),
+(19, 'Balo chống gù Miti', 5, 350000.00, NULL),
+(20, 'Ví da nam Sen', 5, 290000.00, NULL);
 
 -- 5. Thêm dữ liệu mẫu bảng orders (Đơn hàng giao rải từ tháng 5 đến đầu tháng 6)
 INSERT INTO orders (id, user_id, shipping_address, total_amount, ordered_at) VALUES
