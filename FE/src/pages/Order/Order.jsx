@@ -101,10 +101,10 @@ export default function Order() {
     <div className={styles.pageContainer}>
       <div className={styles.header}>
         <h1 className={styles.title}>Quản Lý Đơn Hàng</h1>
-        <button className={styles.addBtn} onClick={handleOpenCreate}>
+        {/* <button className={styles.addBtn} onClick={handleOpenCreate}>
           <Plus size={16} weight="bold" />
           Tạo đơn hàng mới
-        </button>
+        </button> */}
       </div>
 
       {error && <div style={{ color: 'var(--danger-color)', fontSize: '14px', marginBottom: '1rem' }}>{error}</div>}

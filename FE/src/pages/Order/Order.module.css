@@ -246,9 +246,18 @@
   color: var(--text-primary);
 }
 
+.modalContent form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
 .modalBody {
   padding: 1.5rem;
   overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .modalFooter {
